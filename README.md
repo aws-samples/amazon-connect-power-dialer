@@ -133,8 +133,8 @@ The solution relies on Step Functions as the main orchestation point and Lambda 
 1. Loading a dialing list.
 2. Launching a dialing job.
 
-### Loading a dialing list.
-To load a list, simply upload the CSV file (example is provided on file samplelist.csv), point the dialer to this file and invoke the ListLoad function.
+### Loading a dialing list. 
+To load a list, simply upload the CSV file (example is provided on file [sample-file](/sample-files/sample-load.csv "sample-file") ), point the dialer to this file and invoke the ListLoad function.
 
 #### Uploading the file 
 1. Generate a CSV file with the same structure as the example.
