@@ -1,0 +1,188 @@
+{
+  "Comment": "Dialer Thread Activities",
+  "StartAt": "InitialDial",
+  "States": {
+    "InitialDial": {
+      "Comment": "Place call",
+      "Type": "Task",
+      "Resource": "arn:aws:states:::lambda:invoke.waitForTaskToken",
+      "Catch": [
+        {
+          "ErrorEquals": [
+            "States.ALL"
+          ],
+          "Next": "dialingError"
+        }
+      ],
+      "Parameters": {
+        "FunctionName": "${PowerDialerdialArn}",
+        "Payload": {
+          "config.$": "$.config",
+          "params.$": "$.params",
+          "contacts.$": "$.contacts",
+          "TaskToken.$": "$$.Task.Token"
+        }
+      },
+      "Next": "getDialerStatus",
+      "ResultPath": null
+    },
+    "getDialerStatus": {
+      "Comment": "Validate Dialer is Active",
+      "Type": "Task",
+      "Resource": "arn:aws:states:::dynamodb:getItem",
+      "Parameters": {
+        "TableName.$": "$.config.dialerconfigtable",
+        "Key": {
+          "parameter": "activeDialer"
+        }
+      },
+      "ResultPath": "$.params.activeDialer",
+      "ResultSelector": {
+        "value.$": "$.Item.currentValue.BOOL"
+      },
+      "Next": "isDialerActive"
+    },
+    "isDialerActive": {
+      "Type": "Choice",
+      "Choices": [
+        {
+          "Variable": "$.params.activeDialer.value",
+          "BooleanEquals": true,
+          "Next": "GetAvailAgents"
+        }
+      ],
+      "Default": "DialComplete"
+    },
+    "GetAvailAgents": {
+      "Comment": "Check available agents in queue",
+      "Type": "Task",
+      "Resource": "arn:aws:states:::lambda:invoke",
+      "Catch": [
+        {
+          "ErrorEquals": [
+            "States.ALL"
+          ],
+          "Next": "dialingError"
+        }
+      ],
+      "Parameters": {
+        "FunctionName": "${PowerDialergetAvailAgentsArn}",
+        "Payload": {
+          "params.$": "$.params"
+        }
+      },
+      "Next": "areAgentsAvailable",
+      "ResultPath": "$.availAgents",
+      "ResultSelector": {
+        "value.$": "$.Payload.availAgents"
+      }
+    },
+    "areAgentsAvailable": {
+      "Type": "Choice",
+      "Choices": [
+        {
+          "Variable": "$.availAgents.value",
+          "NumericGreaterThan": 0,
+          "Next": "GetContacts"
+        }
+      ],
+      "Default": "waitForAgents"
+    },
+    "waitForAgents": {
+      "Comment": "If agents are not available wait 5 seconds before retry",
+      "Type": "Wait",
+      "Seconds": 5,
+      "Next": "getDialerStatus"
+    },
+    "GetContacts": {
+      "Comment": "Get Contacts to be called. Forcing availAgents to 1 for single thread. ",
+      "Type": "Task",
+      "Resource": "arn:aws:states:::lambda:invoke",
+      "Catch": [
+        {
+          "ErrorEquals": [
+            "States.ALL"
+          ],
+          "Next": "dialingError"
+        }
+      ],
+      "Parameters": {
+        "FunctionName": "${PowerDialergetContactsArn}",
+        "Payload": {
+          "config.$": "$.config",
+          "params.$": "$.params",
+          "availAgents": 1
+        }
+      },
+      "Next": "isListEmpty",
+      "ResultPath": "$.contacts",
+      "ResultSelector": {
+        "entries.$": "$.Payload.contacts",
+        "EndOfList.$": "$.Payload.EndOfList"
+      }
+    },
+    "isListEmpty": {
+      "Type": "Choice",
+      "Choices": [
+        {
+          "Variable": "$.contacts.EndOfList",
+          "BooleanEquals": false,
+          "Next": "Dial"
+        }
+      ],
+      "Default": "inactivateDialer"
+    },
+    "Dial": {
+      "Comment": "Place call",
+      "Type": "Task",
+      "Resource": "arn:aws:states:::lambda:invoke.waitForTaskToken",
+      "Catch": [
+        {
+          "ErrorEquals": [
+            "States.ALL"
+          ],
+          "Next": "dialingError"
+        }
+      ],
+      "Parameters": {
+        "FunctionName": "${PowerDialerdialArn}",
+        "Payload": {
+          "config.$": "$.config",
+          "params.$": "$.params",
+          "contacts.$": "$.contacts.entries[0]",
+          "TaskToken.$": "$$.Task.Token"
+        }
+      },
+      "Next": "getDialerStatus",
+      "ResultPath": null
+    },
+    "inactivateDialer": {
+      "Comment": "Reset dialing index",
+      "Type": "Task",
+      "Resource": "arn:aws:states:::dynamodb:updateItem",
+      "Parameters": {
+        "TableName.$": "$.config.dialerconfigtable",
+        "Key": {
+          "parameter": "activeDialer"
+        },
+        "UpdateExpression": "SET #v = :val",
+        "ExpressionAttributeNames": {
+          "#v": "currentValue"
+        },
+        "ExpressionAttributeValues": {
+          ":val": {
+            "BOOL": false
+          }
+        },
+        "ReturnValues": "UPDATED_NEW"
+      },
+      "Next": "DialComplete"
+    },
+    "DialComplete": {
+      "Type": "Succeed"
+    },
+    "dialingError": {
+      "Type": "Fail"
+    }
+  }
+}

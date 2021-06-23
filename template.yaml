@@ -1,0 +1,471 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: >
+  Power Dialer for Amazon Connect Application.
+
+Globals:
+  Function:
+    Timeout: 60
+    MemorySize: 128
+    Runtime: python3.8
+
+Resources:
+
+  iobucket:
+    Type: AWS::S3::Bucket
+
+  DialerConfig: 
+    Type: AWS::DynamoDB::Table
+    Properties: 
+      AttributeDefinitions: 
+        - 
+          AttributeName: "parameter"
+          AttributeType: "S"
+
+
+      KeySchema: 
+        - 
+          AttributeName: "parameter"
+          KeyType: "HASH"
+
+      BillingMode: "PAY_PER_REQUEST"
+      #TableName: "ConnectPD-DialerConfig"
+  
+  dialList: 
+    Type: AWS::DynamoDB::Table
+    Properties: 
+      AttributeDefinitions: 
+        - 
+          AttributeName: "seqID"
+          AttributeType: "N"
+
+      KeySchema: 
+        - 
+          AttributeName: "seqID"
+          KeyType: "HASH"
+
+      BillingMode: "PAY_PER_REQUEST"
+      #TableName: "ConnectPD-dialList"
+
+  ActiveDialing:
+    Type: AWS::DynamoDB::Table
+    Properties: 
+      AttributeDefinitions: 
+        - 
+          AttributeName: "contactId"
+          AttributeType: "S"
+
+      KeySchema: 
+        - 
+          AttributeName: "contactId"
+          KeyType: "HASH"
+
+      BillingMode: "PAY_PER_REQUEST"
+      #TableName: "ConnectPD-ActiveDialing"
+  
+  ControlSFRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          -
+            Effect: Allow
+            Principal:
+              Service:
+                - states.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns: 
+        - arn:aws:iam::aws:policy/AmazonDynamoDBFullAccess
+      Policies:
+        -
+          PolicyName: LogAccess
+          PolicyDocument:
+            Version: 2012-10-17
+            Statement:
+              -
+                Effect: Allow
+                Action:
+                  - 'logs:CreateLogGroup'
+                  - 'logs:CreateLogDelivery'
+                  - 'logs:CreateLogStream'
+                  - 'logs:PutLogEvents'
+                  - 'logs:GetLogEvents'
+                Resource:
+                  - '*'
+
+        -
+          PolicyName: ConfigTableAccess
+          PolicyDocument:
+            Version: 2012-10-17
+            Statement:
+              -
+                Effect: Allow
+                Action:
+                  - 'dynamodb:PutItem'
+                  - 'dynamodb:DeleteItem'
+                  - 'dynamodb:GetItem'
+                  - 'dynamodb:Scan'
+                  - 'dynamodb:Query'
+                  - 'dynamodb:UpdateItem'
+                Resource:
+                  - !GetAtt ActiveDialing.Arn
+                  - !GetAtt DialerConfig.Arn
+                  - !GetAtt dialList.Arn      
+        -
+          PolicyName: ControlStateMachine
+          PolicyDocument:
+            Version: 2012-10-17
+            Statement:
+              -
+                Effect: Allow
+                Action:
+                  - states:DescribeExecution
+                  - states:StartExecution
+                  - states:StopExecution
+                Resource: !GetAtt DialThreadSF.Arn
+              -
+                Effect: Allow
+                Action:
+                  - events:PutTargets
+                  - events:PutRule
+                  - events:DescribeRule
+                Resource: !Sub arn:aws:events:${AWS::Region}:${AWS::AccountId}:rule/StepFunctionsGetEventsForStepFunctionsExecutionRule
+              -
+                Effect: Allow
+                Action: lambda:InvokeFunction
+                Resource:
+                  - !GetAtt dial.Arn
+                  - !GetAtt getAvailAgents.Arn
+                  - !GetAtt getConfig.Arn
+                  - !GetAtt getContacts.Arn
+                  - !GetAtt ListLoad.Arn
+                  - !GetAtt ProcessAgentsEvents.Arn
+                  - !GetAtt SaveResults.Arn
+
+  
+  ThreadSFRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          -
+            Effect: Allow
+            Principal:
+              Service:
+                - states.amazonaws.com
+            Action: sts:AssumeRole
+
+      Policies:
+        -
+          PolicyName: ConfigTableAccess
+          PolicyDocument:
+            Version: 2012-10-17
+            Statement:
+              -
+                Effect: Allow
+                Action:
+                  - 'dynamodb:PutItem'
+                  - 'dynamodb:DeleteItem'
+                  - 'dynamodb:GetItem'
+                  - 'dynamodb:Scan'
+                  - 'dynamodb:Query'
+                  - 'dynamodb:UpdateItem'
+                Resource:
+                  - !GetAtt ActiveDialing.Arn
+                  - !GetAtt DialerConfig.Arn
+                  - !GetAtt dialList.Arn      
+        -
+          PolicyName: InvokeLambdaFunctions
+          PolicyDocument:
+            Version: 2012-10-17
+            Statement:
+              -
+                Effect: Allow
+                Action: lambda:InvokeFunction
+                Resource:
+                  - !GetAtt dial.Arn
+                  - !GetAtt getAvailAgents.Arn
+                  - !GetAtt getConfig.Arn
+                  - !GetAtt getContacts.Arn
+                  - !GetAtt ListLoad.Arn
+                  - !GetAtt ProcessAgentsEvents.Arn
+                  - !GetAtt SaveResults.Arn
+  
+  PowerDialerLambdaRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          -
+            Effect: Allow
+            Principal:
+              Service:
+                - lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns: 
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaKinesisExecutionRole
+      Policies:
+        -
+          PolicyName: BucketAccess
+          PolicyDocument:
+            Version: 2012-10-17
+            Statement:
+              -
+                Effect: Allow
+                Action:
+                  - 's3:PutObject'
+                  - 's3:GetObject'
+                  - 's3:DeleteObject'
+                  - 's3:ListBucket'
+                Resource:
+                  - !GetAtt iobucket.Arn
+                  - !Sub 
+                    - '${bucketArn}/*'
+                    - bucketArn: !GetAtt iobucket.Arn
+        -
+          PolicyName: ConfigTableAccess
+          PolicyDocument:
+            Version: 2012-10-17
+            Statement:
+              -
+                Effect: Allow
+                Action:
+                  - 'dynamodb:PutItem'
+                  - 'dynamodb:DeleteItem'
+                  - 'dynamodb:GetItem'
+                  - 'dynamodb:Scan'
+                  - 'dynamodb:Query'
+                  - 'dynamodb:UpdateItem'
+                Resource:
+                  - !GetAtt ActiveDialing.Arn
+                  - !GetAtt DialerConfig.Arn
+                  - !GetAtt dialList.Arn
+
+        -
+          PolicyName: SendTaskToken
+          PolicyDocument:
+            Version: 2012-10-17
+            Statement:
+              -
+                Effect: Allow
+                Action:
+                  - 'states:SendTaskSuccess'
+                  - 'states:SendTaskFailure'
+                  - 'states:SendTaskHeartbeat'
+                Resource:
+                  - '*'
+        -
+          PolicyName: InitiateVoiceContact
+          PolicyDocument:
+            Version: 2012-10-17
+            Statement:
+              -
+                Effect: Allow
+                Action:
+                  - 'connect:StartOutboundVoiceContact'
+                Resource:
+                  - '*'
+        -
+          PolicyName: getCurrentMetricData
+          PolicyDocument:
+            Version: 2012-10-17
+            Statement:
+              -
+                Effect: Allow
+                Action:
+                  - 'connect:GetCurrentMetricData'
+                Resource:
+                  - '*'
+        -
+          PolicyName: TableInitialize
+          PolicyDocument:
+            Version: 2012-10-17
+            Statement:
+              -
+                Effect: Allow
+                Action:
+                  - 'lambda:AddPermission'
+                  - 'lambda:RemovePermission'
+                  - 'events:PutRule'
+                  - 'events:DeleteRule'
+                  - 'events:PutTargets'
+                  - 'events:RemoveTargets'
+                Resource:
+                  - '*'
+        
+  
+  DialThreadSF:
+    Type: AWS::Serverless::StateMachine
+    Properties:
+      DefinitionUri: statemachine/PowerDialer-dialthread.asl.json
+      Role: !GetAtt ThreadSFRole.Arn
+      DefinitionSubstitutions:
+        PowerDialerdialArn: !GetAtt dial.Arn
+        PowerDialergetAvailAgentsArn: !GetAtt getAvailAgents.Arn
+        PowerDialergetConfigArn: !GetAtt getConfig.Arn
+        PowerDialergetContactsArn: !GetAtt getContacts.Arn
+        PowerDialerListLoadArn: !GetAtt ListLoad.Arn
+        PowerDialerProcessAgentsEventsArn: !GetAtt ProcessAgentsEvents.Arn
+        PowerDialerSaveResultsArn: !GetAtt SaveResults.Arn
+
+  DialerControlSF:
+    Type: AWS::Serverless::StateMachine
+    Properties:
+      Role: !GetAtt ControlSFRole.Arn
+      DefinitionUri: statemachine/PowerDialer-control.asl.json
+      DefinitionSubstitutions:
+        PowerDialerdialArn: !GetAtt dial.Arn
+        PowerDialergetAvailAgentsArn: !GetAtt getAvailAgents.Arn
+        PowerDialergetConfigArn: !GetAtt getConfig.Arn
+        PowerDialergetContactsArn: !GetAtt getContacts.Arn
+        PowerDialerListLoadArn: !GetAtt ListLoad.Arn
+        PowerDialerProcessAgentsEventsArn: !GetAtt ProcessAgentsEvents.Arn
+        PowerDialerSaveResultsArn: !GetAtt SaveResults.Arn
+        PowerDialerdialthreadArn: !GetAtt DialThreadSF.Arn
+        ConnectPDDialerConfig: !Ref DialerConfig
+
+
+  PowerDialer:
+    Type: AWS::Serverless::LayerVersion
+    Properties:
+      ContentUri: PowerDialer-layer/
+      CompatibleRuntimes:
+        - python3.6
+        - python3.7
+        - python3.8
+    Metadata:
+      BuildMethod: python3.8
+
+
+  dial:
+    Type: AWS::Serverless::Function 
+    Properties:
+      Role: !GetAtt PowerDialerLambdaRole.Arn
+      CodeUri: PowerDialer-dial/
+      Handler: lambda_function.lambda_handler
+      Layers:
+        - !Ref PowerDialer
+
+      
+  getAvailAgents:
+    Type: AWS::Serverless::Function 
+    Properties:
+      Role: !GetAtt PowerDialerLambdaRole.Arn
+      CodeUri: PowerDialer-getAvailAgents/
+      Handler: lambda_function.lambda_handler
+  
+  getConfig:
+    Type: AWS::Serverless::Function 
+    Properties:
+      Role: !GetAtt PowerDialerLambdaRole.Arn
+      CodeUri: PowerDialer-getConfig/
+      Handler: lambda_function.lambda_handler
+      Layers:
+        - !Ref PowerDialer
+
+  getContacts:
+    Type: AWS::Serverless::Function 
+    Properties:
+      Role: !GetAtt PowerDialerLambdaRole.Arn
+      CodeUri: PowerDialer-getContacts/
+      Handler: lambda_function.lambda_handler
+      Layers:
+        - !Ref PowerDialer
+
+
+  ListLoad:
+    Type: AWS::Serverless::Function 
+    Properties:
+      Role: !GetAtt PowerDialerLambdaRole.Arn
+      CodeUri: PowerDialer-ListLoad/
+      Handler: lambda_function.lambda_handler
+      MemorySize: 512
+      Timeout: 600
+      Layers:
+        - !Ref PowerDialer
+      Environment: 
+        Variables:
+          CONFIG_TABLE: !Ref DialerConfig
+
+  initializeTable:
+    Type: AWS::Serverless::Function 
+    Properties:
+      Role: !GetAtt PowerDialerLambdaRole.Arn
+      CodeUri: PowerDialer-initializeTable/
+      Handler: lambda_function.lambda_handler
+
+
+  ProcessAgentsEvents:
+    Type: AWS::Serverless::Function 
+    Properties:
+      Role: !GetAtt PowerDialerLambdaRole.Arn
+      CodeUri: PowerDialer-ProcessAgentsEvents/
+      Handler: lambda_function.lambda_handler
+      Layers:
+        - !Ref PowerDialer
+      Environment: 
+        Variables:
+          CONFIG_TABLE: !Ref DialerConfig
+          ACTIVE_DIALING: !Ref ActiveDialing
+
+  SaveResults:
+    Type: AWS::Serverless::Function 
+    Properties:
+      Role: !GetAtt PowerDialerLambdaRole.Arn
+      CodeUri: PowerDialer-SaveResults/
+      Handler: lambda_function.lambda_handler
+      Runtime: python3.8
+      MemorySize: 512
+      Timeout: 600
+      Layers:
+        - !Ref PowerDialer
+
+  InitializeDB:
+    Type: Custom::InitializeDialer
+    Properties:
+      ServiceToken: !GetAtt initializeTable.Arn
+      CONFIG_TABLE: !Ref DialerConfig
+      IOBUCKET: !Ref iobucket
+      ACTIVE_DIALING_TABLE: !Ref ActiveDialing
+      DIALER_LIST: !Ref dialList
+
+Outputs:
+  iobucket:
+    Description: "Bucket for List Loading and Results generation"
+    Value: !Ref iobucket  
+  dial:
+    Description: "PowerDialer-dial Lambda Function ARN"
+    Value: !GetAtt dial.Arn
+  getAvailAgents:
+    Description: "PowerDialer-getAvailAgents Lambda Function ARN"
+    Value: !GetAtt getAvailAgents.Arn
+  getConfig:
+    Description: "PowerDialer-getConfig Lambda Function ARN"
+    Value: !GetAtt getConfig.Arn
+  getContacts:
+    Description: "PowerDialer-getContacts Lambda Function ARN"
+    Value: !GetAtt getContacts.Arn
+  ListLoad:
+    Description: "PowerDialer-ListLoad Lambda Function ARN"
+    Value: !GetAtt ListLoad.Arn
+  ProcessAgentsEvents:
+    Description: "PowerDialer-ProcessAgentsEvents Lambda Function ARN"
+    Value: !GetAtt ProcessAgentsEvents.Arn
+  SaveResults:
+    Description: "PowerDialer-SaveResults Lambda Function ARN"
+    Value: !GetAtt SaveResults.Arn
+
+  getAvailAgentsRole:
+    Description: "Lambda Functions Role"
+    Value: !GetAtt PowerDialerLambdaRole.Arn
+  DialThreadStepFunctionsRole:
+    Description: "StepFunctions Role ARN"
+    Value: !GetAtt ThreadSFRole.Arn
+  ControlStepFunctionsRole:
+    Description: "StepFunctions Role ARN"
+    Value: !GetAtt ControlSFRole.Arn
+  
