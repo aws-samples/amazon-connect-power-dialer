@@ -1,4 +1,4 @@
-# PowerDialer
+# Amazon Connect Power Dialer
 This project contains source code and supporting files for a serverless dialer to be used on top of an Amazon Connect instance.
 
 The basic operation of the solution is based on the principle of a Power Dialer: New calls are placed once agents complete previous calls. Since calls are placed automatically, the inefficiencies and error-prone nature of manual dialing are mitigated; yet, since calls are initiated until agents become available, you can maintain the warm nature of person to person contacts (no wait time for end users when being contacted).
