@@ -32,7 +32,7 @@ The project includes a cloud formation template with a Serverless Application Mo
 - getContacts: Gets contact phone numbers to dial from a DynamoDB table.
 - ListLoad: Loads dialing list from a CSV file to DynamoDB.
 - ProcessAgentsEvents: Processes Agent Events to identify status changes and determine when would the next call should be placed.
-- SaveResults: Generates a CSV file based on the dialing process. Currently, the numbers identified as invalid are marked.
+- SaveResults: Generates a CSV file based from the dialing attempts.
 
 
 ### Step Functions
@@ -58,14 +58,23 @@ The project includes a cloud formation template with a Serverless Application Mo
 
 ## Deploy the solution
 1. Clone this repo.
+
 `git clone https://github.com/molopa/PowerDialer4Connect`
 
 2. Build the solution with SAM.
-`sam build` or `sam build -u` if you get an error message about Python requirements.
+
+`sam build` 
+
+if you get an error message about requirementsm you can try using containers.
+
+`sam build -u` 
+
 
 3. Deploy the solution.
+
 `sam deploy -g`
-SAM will ask options about the name of the application (use "PowerDialer" or something similar) as all resources will be grouped under an application with this name; Region and a confirmation prompt before deploying resources, enter y.
+
+SAM will ask for the name of the application (use "PowerDialer" or something similar) as all resources will be grouped under it; Region and a confirmation prompt before deploying resources, enter y.
 SAM can save this information if you plan un doing changes, answer Y when prompted and accept the default environment and file name for the configuration.
 
 
@@ -74,7 +83,7 @@ SAM can save this information if you plan un doing changes, answer Y when prompt
 Agent activity is monitored using Agent Events, these events are pushed to a Kinesis Stream.
 
 1. Browse to the Amazon Connect console.
-2. Click on the instance alias name (Not on the click on the Access URL).
+2. Click on the instance alias name (Not on the Access URL).
 3. Go to the Data Streaming section.
 4. Verify the "Enable data streaming" checkbox is ticked or click it to enable streaming.
 5. Under "Contact Trace Records" select Kinesis Stream.
@@ -103,7 +112,7 @@ Make sure you replace the values for contactflow, phone numberm, queue and insta
 
 ## Configure Dialer Parameters
 
-1. Navigate to the DynamoDB console and open the table named: "ConnectPD-DialerConfig"
+1. Navigate to the DynamoDB console and open the table named: "ConnectPD-DialerConfig".
 2. Create entries for the following Items with the corresponding values. Note this items are case sensitive. The associated value must be specified with a "currentValue" attribute (also case sensitive).
 
 | parameter   | currentValue |
@@ -121,12 +130,12 @@ Make sure you replace the values for contactflow, phone numberm, queue and insta
 
 The agent activity is monitored thanks to the previously configured Kinesis Stream. This will be now configured as a trigger for a specific Lambda Function to process events.
 
-8. Go to Applications and select "PowerDialer" or the name you specified when deploying the solution with SAM.
-9. Click on ProcessAgentsEvents from the listed functions.
-10. Click on triggers on the panel Function Overview.
-11. On the Add trigger screen, click on the trigger list and select Kinesis.
-12. Select the Kinesis stream you created previously.
-13. Leave the rest of the parameters as specified by default. Click Add to save this trigger configuration.
+1. Go to Applications and select "PowerDialer" or the name you specified when deploying the solution with SAM.
+2. Click on ProcessAgentsEvents from the listed functions.
+3. Click on triggers on the panel Function Overview.
+4. On the Add trigger screen, click on the trigger list and select Kinesis.
+5. Select the Kinesis stream you created previously.
+6. Leave the rest of the parameters as specified by default. Click Add to save this trigger configuration.
  
 ## Operation
 The solution relies on Step Functions as the main orchestation point and Lambda Functions as the processing units. Starting a campaign will include 2 steps:
@@ -147,10 +156,6 @@ To load a list, simply upload the CSV file (example is provided on file [sample-
 1. Navigate to the DynamoDB console and select the table named ConnectPD-DialerConfig.
 2. Click on create item.
 3. Specify the following parameter and currentValue. Pay attention as everything (key, attribute and value names) is case sensitive.
-| parameter   | currentValue |
-|----------|:-------------:|
-| iobucket | Bucket name|
-4. Repeat the steps to add an additional item for the following.
 
 | parameter   | currentValue |
 |----------|:-------------:|
@@ -160,8 +165,8 @@ To load a list, simply upload the CSV file (example is provided on file [sample-
 1. Navigate to the Lambda console.
 2. Click on Applications and select "PowerDialer" or the name you used for the application.
 3. Click on the ListLoad function name.
-4. Click on the TestButton. A Configure Test Event screen will appear. Specify "Load" as the event name and leave everything as default. Click Create.
-5. Now click once again the Test button. This will initiate the load. The processing time will depend entirely on the number of entries on the list.
+4. Click on the Test category. 
+5. Now click on the Test button. This will initiate the load. The processing time will depend entirely on the number of entries on the list.
 
 ### Launching a dialing job.
 The process to start the dialing job is through the Power Dialer Control Step Function, initiate an execution to launch the dialing job.
