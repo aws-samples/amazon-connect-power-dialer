@@ -59,13 +59,13 @@ The project includes a cloud formation template with a Serverless Application Mo
 ## Deploy the solution
 1. Clone this repo.
 
-`git clone https://github.com/molopa/PowerDialer4Connect`
+`git clone https://github.com/aws-samples/amazon-connect-power-dialer`
 
 2. Build the solution with SAM.
 
 `sam build` 
 
-if you get an error message about requirementsm you can try using containers.
+if you get an error message about requirements you can try using containers.
 
 `sam build -u` 
 
