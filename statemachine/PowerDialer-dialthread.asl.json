@@ -29,16 +29,13 @@
     "getDialerStatus": {
       "Comment": "Validate Dialer is Active",
       "Type": "Task",
-      "Resource": "arn:aws:states:::dynamodb:getItem",
+      "Resource": "arn:aws:states:::aws-sdk:ssm:getParameter",
       "Parameters": {
-        "TableName.$": "$.config.dialerconfigtable",
-        "Key": {
-          "parameter": "activeDialer"
-        }
+        "Name": "${ParameterDialerStatus}"
       },
       "ResultPath": "$.params.activeDialer",
       "ResultSelector": {
-        "value.$": "$.Item.currentValue.BOOL"
+        "value.$": "$.Parameter.Value"
       },
       "Next": "isDialerActive"
     },
@@ -47,7 +44,7 @@
       "Choices": [
         {
           "Variable": "$.params.activeDialer.value",
-          "BooleanEquals": true,
+          "StringEquals": "True",
           "Next": "GetAvailAgents"
         }
       ],
@@ -126,7 +123,7 @@
       "Choices": [
         {
           "Variable": "$.contacts.EndOfList",
-          "BooleanEquals": false,
+          "StringEquals": "False",
           "Next": "Dial"
         }
       ],
@@ -157,24 +154,13 @@
       "ResultPath": null
     },
     "inactivateDialer": {
-      "Comment": "Reset dialing index",
+      "Comment": "Validate dialer status",
       "Type": "Task",
-      "Resource": "arn:aws:states:::dynamodb:updateItem",
+      "Resource": "arn:aws:states:::aws-sdk:ssm:putParameter",
       "Parameters": {
-        "TableName.$": "$.config.dialerconfigtable",
-        "Key": {
-          "parameter": "activeDialer"
-        },
-        "UpdateExpression": "SET #v = :val",
-        "ExpressionAttributeNames": {
-          "#v": "currentValue"
-        },
-        "ExpressionAttributeValues": {
-          ":val": {
-            "BOOL": false
-          }
-        },
-        "ReturnValues": "UPDATED_NEW"
+        "Name": "${ParameterDialerStatus}",
+        "Overwrite":true,
+        "Value": "False"
       },
       "Next": "DialComplete"
     },

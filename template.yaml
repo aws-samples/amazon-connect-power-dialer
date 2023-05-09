@@ -8,29 +8,22 @@ Globals:
     Timeout: 60
     MemorySize: 128
     Runtime: python3.8
+    ReservedConcurrentExecutions: 5
 
 Resources:
 
-  iobucket:
+  dialinglistbucket:
     Type: AWS::S3::Bucket
-
-  DialerConfig: 
-    Type: AWS::DynamoDB::Table
-    Properties: 
-      AttributeDefinitions: 
-        - 
-          AttributeName: "parameter"
-          AttributeType: "S"
-
-
-      KeySchema: 
-        - 
-          AttributeName: "parameter"
-          KeyType: "HASH"
-
-      BillingMode: "PAY_PER_REQUEST"
-      #TableName: "ConnectPD-DialerConfig"
+    Properties:
+      BucketName: !Join ['-', ['dialer-input-bucket', !Select [4, !Split ['-', !Select [2, !Split ['/', !Ref AWS::StackId]]]]]]
+    DeletionPolicy: Delete
   
+  resultsbucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Join ['-', ['dialer-output-bucket', !Select [4, !Split ['-', !Select [2, !Split ['/', !Ref AWS::StackId]]]]]]
+    DeletionPolicy: Delete
+    
   dialList: 
     Type: AWS::DynamoDB::Table
     Properties: 
@@ -45,7 +38,10 @@ Resources:
           KeyType: "HASH"
 
       BillingMode: "PAY_PER_REQUEST"
-      #TableName: "ConnectPD-dialList"
+      PointInTimeRecoverySpecification:
+        PointInTimeRecoveryEnabled: True
+      SSESpecification:
+        SSEEnabled: True
 
   ActiveDialing:
     Type: AWS::DynamoDB::Table
@@ -61,7 +57,11 @@ Resources:
           KeyType: "HASH"
 
       BillingMode: "PAY_PER_REQUEST"
-      #TableName: "ConnectPD-ActiveDialing"
+      
+      PointInTimeRecoverySpecification: 
+        PointInTimeRecoveryEnabled: True
+      SSESpecification:
+        SSEEnabled: True
   
   ControlSFRole:
     Type: AWS::IAM::Role
@@ -110,7 +110,6 @@ Resources:
                   - 'dynamodb:UpdateItem'
                 Resource:
                   - !GetAtt ActiveDialing.Arn
-                  - !GetAtt DialerConfig.Arn
                   - !GetAtt dialList.Arn      
         -
           PolicyName: ControlStateMachine
@@ -140,9 +139,20 @@ Resources:
                   - !GetAtt getConfig.Arn
                   - !GetAtt getContacts.Arn
                   - !GetAtt ListLoad.Arn
-                  - !GetAtt ProcessAgentsEvents.Arn
                   - !GetAtt SaveResults.Arn
-
+        -
+          PolicyName: ParameterAccess
+          PolicyDocument:
+            Version: 2012-10-17
+            Statement:
+              -
+                Effect: Allow
+                Action:
+                  - 'ssm:GetParametersByPath'
+                  - 'ssm:GetParameter'
+                  - 'ssm:PutParameter'
+                Resource:
+                  - '*'
   
   ThreadSFRole:
     Type: AWS::IAM::Role
@@ -174,7 +184,6 @@ Resources:
                   - 'dynamodb:UpdateItem'
                 Resource:
                   - !GetAtt ActiveDialing.Arn
-                  - !GetAtt DialerConfig.Arn
                   - !GetAtt dialList.Arn      
         -
           PolicyName: InvokeLambdaFunctions
@@ -190,8 +199,20 @@ Resources:
                   - !GetAtt getConfig.Arn
                   - !GetAtt getContacts.Arn
                   - !GetAtt ListLoad.Arn
-                  - !GetAtt ProcessAgentsEvents.Arn
                   - !GetAtt SaveResults.Arn
+        -
+          PolicyName: ParameterAccess
+          PolicyDocument:
+            Version: 2012-10-17
+            Statement:
+              -
+                Effect: Allow
+                Action:
+                  - 'ssm:GetParametersByPath'
+                  - 'ssm:GetParameter'
+                  - 'ssm:PutParameter'
+                Resource:
+                  - '*'
   
   PowerDialerLambdaRole:
     Type: AWS::IAM::Role
@@ -222,10 +243,20 @@ Resources:
                   - 's3:DeleteObject'
                   - 's3:ListBucket'
                 Resource:
-                  - !GetAtt iobucket.Arn
                   - !Sub 
-                    - '${bucketArn}/*'
-                    - bucketArn: !GetAtt iobucket.Arn
+                    - 'arn:aws:s3:::${dialingListBucket}'
+                    - dialingListBucket: !Join ['-', ['dialer-input-bucket', !Select [4, !Split ['-', !Select [2, !Split ['/', !Ref AWS::StackId]]]]]]
+                  - !Sub 
+                    - 'arn:aws:s3:::${dialingListBucket}/*'
+                    - dialingListBucket: !Join ['-', ['dialer-input-bucket', !Select [4, !Split ['-', !Select [2, !Split ['/', !Ref AWS::StackId]]]]]]
+                  - !Sub 
+                    - 'arn:aws:s3:::${resultsbucket}'
+                    - dialingListBucket: !Join ['-', ['dialer-output-bucket', !Select [4, !Split ['-', !Select [2, !Split ['/', !Ref AWS::StackId]]]]]]
+                  - !Sub 
+                    - 'arn:aws:s3:::${resultsbucket}/*'
+                    - dialingListBucket: !Join ['-', ['dialer-output-bucket', !Select [4, !Split ['-', !Select [2, !Split ['/', !Ref AWS::StackId]]]]]]
+
+
         -
           PolicyName: ConfigTableAccess
           PolicyDocument:
@@ -242,7 +273,6 @@ Resources:
                   - 'dynamodb:UpdateItem'
                 Resource:
                   - !GetAtt ActiveDialing.Arn
-                  - !GetAtt DialerConfig.Arn
                   - !GetAtt dialList.Arn
 
         -
@@ -280,6 +310,21 @@ Resources:
                   - 'connect:GetCurrentMetricData'
                 Resource:
                   - '*'
+
+
+        -
+          PolicyName: ParameterAccess
+          PolicyDocument:
+            Version: 2012-10-17
+            Statement:
+              -
+                Effect: Allow
+                Action:
+                  - 'ssm:GetParametersByPath'
+                  - 'ssm:GetParameter'
+                  - 'ssm:PutParameter'
+                Resource:
+                  - '*'
         -
           PolicyName: TableInitialize
           PolicyDocument:
@@ -296,7 +341,53 @@ Resources:
                   - 'events:RemoveTargets'
                 Resource:
                   - '*'
-        
+        -
+          PolicyName: EncryptionAcess
+          PolicyDocument:
+            Version: 2012-10-17
+            Statement:
+              -
+                Effect: Allow
+                Action:
+                  - 'kms:Decrypt'
+                  - 'kms:GenerateDataKey'
+                Resource:
+                  - '*'
+  
+  CampaignLauncherRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          -
+            Effect: Allow
+            Principal:
+              Service:
+                - events.amazonaws.com
+            Action: sts:AssumeRole
+
+      Policies:
+        -
+          PolicyName: ControlStateMachine
+          PolicyDocument:
+            Version: 2012-10-17
+            Statement:
+              -
+                Effect: Allow
+                Action:
+                  - states:DescribeExecution
+                  - states:StartExecution
+                  - states:StopExecution
+                Resource: '*'
+              -
+                Effect: Allow
+                Action:
+                  - events:PutTargets
+                  - events:PutRule
+                  - events:DescribeRule
+                Resource: !Sub arn:aws:events:${AWS::Region}:${AWS::AccountId}:rule/StepFunctionsGetEventsForStepFunctionsExecutionRule
+  
   
   DialThreadSF:
     Type: AWS::Serverless::StateMachine
@@ -309,8 +400,12 @@ Resources:
         PowerDialergetConfigArn: !GetAtt getConfig.Arn
         PowerDialergetContactsArn: !GetAtt getContacts.Arn
         PowerDialerListLoadArn: !GetAtt ListLoad.Arn
-        PowerDialerProcessAgentsEventsArn: !GetAtt ProcessAgentsEvents.Arn
         PowerDialerSaveResultsArn: !GetAtt SaveResults.Arn
+        ParameterIndex: !Join ['/', ['/connect/dialer', !Select [4, !Split ['-', !Select [2, !Split ['/', !Ref AWS::StackId]]]],'dialIndex']]
+        ParameterTotalRecords: !Join ['/', ['/connect/dialer', !Select [4, !Split ['-', !Select [2, !Split ['/', !Ref AWS::StackId]]]],'totalRecords']]
+        ParameterActiveDialing: !Join ['/', ['/connect/dialer', !Select [4, !Split ['-', !Select [2, !Split ['/', !Ref AWS::StackId]]]],'table-activedialing']]
+        ParameterDialingList: !Join ['/', ['/connect/dialer', !Select [4, !Split ['-', !Select [2, !Split ['/', !Ref AWS::StackId]]]],'table-dialerlist']]
+        ParameterDialerStatus: !Join ['/', ['/connect/dialer', !Select [4, !Split ['-', !Select [2, !Split ['/', !Ref AWS::StackId]]]],'activeDialer']]
 
   DialerControlSF:
     Type: AWS::Serverless::StateMachine
@@ -323,12 +418,14 @@ Resources:
         PowerDialergetConfigArn: !GetAtt getConfig.Arn
         PowerDialergetContactsArn: !GetAtt getContacts.Arn
         PowerDialerListLoadArn: !GetAtt ListLoad.Arn
-        PowerDialerProcessAgentsEventsArn: !GetAtt ProcessAgentsEvents.Arn
         PowerDialerSaveResultsArn: !GetAtt SaveResults.Arn
         PowerDialerdialthreadArn: !GetAtt DialThreadSF.Arn
-        ConnectPDDialerConfig: !Ref DialerConfig
-
-
+        ParameterIndex: !Join ['/', ['/connect/dialer', !Select [4, !Split ['-', !Select [2, !Split ['/', !Ref AWS::StackId]]]],'dialIndex']]
+        ParameterTotalRecords: !Join ['/', ['/connect/dialer', !Select [4, !Split ['-', !Select [2, !Split ['/', !Ref AWS::StackId]]]],'totalRecords']]
+        ParameterActiveDialing: !Join ['/', ['/connect/dialer', !Select [4, !Split ['-', !Select [2, !Split ['/', !Ref AWS::StackId]]]],'table-activedialing']]
+        ParameterDialingList: !Join ['/', ['/connect/dialer', !Select [4, !Split ['-', !Select [2, !Split ['/', !Ref AWS::StackId]]]],'table-dialerlist']]
+        ParameterDialerStatus: !Join ['/', ['/connect/dialer', !Select [4, !Split ['-', !Select [2, !Split ['/', !Ref AWS::StackId]]]],'activeDialer']]
+        
   PowerDialer:
     Type: AWS::Serverless::LayerVersion
     Properties:
@@ -349,7 +446,11 @@ Resources:
       Handler: lambda_function.lambda_handler
       Layers:
         - !Ref PowerDialer
-
+      Environment: 
+        Variables:
+          DIALER_DEPLOYMENT: !Select [4, !Split ['-', !Select [2, !Split ['/', !Ref AWS::StackId]]]]
+          DIALING_LIST: !Ref dialList
+          ACTIVE_DIALING_TABLE: !Ref ActiveDialing
       
   getAvailAgents:
     Type: AWS::Serverless::Function 
@@ -366,6 +467,9 @@ Resources:
       Handler: lambda_function.lambda_handler
       Layers:
         - !Ref PowerDialer
+      Environment: 
+        Variables:
+          DIALER_DEPLOYMENT: !Select [4, !Split ['-', !Select [2, !Split ['/', !Ref AWS::StackId]]]]
 
   getContacts:
     Type: AWS::Serverless::Function 
@@ -375,6 +479,9 @@ Resources:
       Handler: lambda_function.lambda_handler
       Layers:
         - !Ref PowerDialer
+      Environment: 
+        Variables:
+          DIALER_DEPLOYMENT: !Select [4, !Split ['-', !Select [2, !Split ['/', !Ref AWS::StackId]]]]
 
 
   ListLoad:
@@ -389,28 +496,95 @@ Resources:
         - !Ref PowerDialer
       Environment: 
         Variables:
-          CONFIG_TABLE: !Ref DialerConfig
+          DIALER_DEPLOYMENT: !Select [4, !Split ['-', !Select [2, !Split ['/', !Ref AWS::StackId]]]]
+      Events:
+        LoadFileEvent:
+          Type: S3
+          Properties:
+            Bucket: !Ref dialinglistbucket
+            Events: s3:ObjectCreated:*
+            Filter:
+              S3Key:
+                Rules:
+                  - Name: suffix
+                    Value: ".csv"    
 
-  initializeTable:
+  parameterIndex:
+    Type: AWS::SSM::Parameter
+    Properties: 
+      Name: !Join ['/', ['/connect/dialer', !Select [4, !Split ['-', !Select [2, !Split ['/', !Ref AWS::StackId]]]],'dialIndex']]
+      Type: String
+      Value: '0'
+  
+  parameterDialerStatus:
+    Type: AWS::SSM::Parameter
+    Properties: 
+      Name: !Join ['/', ['/connect/dialer', !Select [4, !Split ['-', !Select [2, !Split ['/', !Ref AWS::StackId]]]],'activeDialer']]
+      Type: String
+      Value: '0'  
+
+  parameterTotalRecords:
+    Type: AWS::SSM::Parameter
+    Properties: 
+      Name: !Join ['/', ['/connect/dialer', !Select [4, !Split ['-', !Select [2, !Split ['/', !Ref AWS::StackId]]]],'totalRecords']]
+      Type: String
+      Value: '0'
+  
+  parameterActiveDialing:
+    Type: AWS::SSM::Parameter
+    Properties: 
+      Name: !Join ['/', ['/connect/dialer', !Select [4, !Split ['-', !Select [2, !Split ['/', !Ref AWS::StackId]]]],'table-activedialing']]
+      Type: String
+      Value: !Ref ActiveDialing
+
+  parameterDialingList:
+    Type: AWS::SSM::Parameter
+    Properties: 
+      Name: !Join ['/', ['/connect/dialer', !Select [4, !Split ['-', !Select [2, !Split ['/', !Ref AWS::StackId]]]],'table-dialerlist']]
+      Type: String
+      Value: !Ref dialList
+
+  parameterContactFlow:
+    Type: AWS::SSM::Parameter
+    Properties: 
+      Name: !Join ['/', ['/connect/dialer', !Select [4, !Split ['-', !Select [2, !Split ['/', !Ref AWS::StackId]]]],'contactflow']]
+      Type: String
+      Value: 'Replace with Connect outbound contact flow.'
+
+  parameterOutputBucket:
+    Type: AWS::SSM::Parameter
+    Properties: 
+      Name: !Join ['/', ['/connect/dialer', !Select [4, !Split ['-', !Select [2, !Split ['/', !Ref AWS::StackId]]]],'ResultsBucket']]
+      Type: String
+      Value: !Ref resultsbucket
+      
+  parameterConnectId:
+    Type: AWS::SSM::Parameter
+    Properties: 
+      Name: !Join ['/', ['/connect/dialer', !Select [4, !Split ['-', !Select [2, !Split ['/', !Ref AWS::StackId]]]],'connectid']]
+      Type: String
+      Value: 'Replace with Connect Instance ID'
+  parameterQueue:
+    Type: AWS::SSM::Parameter
+    Properties: 
+      Name: !Join ['/', ['/connect/dialer', !Select [4, !Split ['-', !Select [2, !Split ['/', !Ref AWS::StackId]]]],'queue']]
+      Type: String
+      Value: 'Replace with Queue ID'
+
+  SetDispositionCode:
     Type: AWS::Serverless::Function 
     Properties:
       Role: !GetAtt PowerDialerLambdaRole.Arn
-      CodeUri: PowerDialer-initializeTable/
-      Handler: lambda_function.lambda_handler
-
-
-  ProcessAgentsEvents:
-    Type: AWS::Serverless::Function 
-    Properties:
-      Role: !GetAtt PowerDialerLambdaRole.Arn
-      CodeUri: PowerDialer-ProcessAgentsEvents/
+      CodeUri: PowerDialer-setDisposition/
       Handler: lambda_function.lambda_handler
       Layers:
         - !Ref PowerDialer
       Environment: 
         Variables:
-          CONFIG_TABLE: !Ref DialerConfig
-          ACTIVE_DIALING: !Ref ActiveDialing
+          DIALER_DEPLOYMENT: !Select [4, !Split ['-', !Select [2, !Split ['/', !Ref AWS::StackId]]]]
+          DIALING_LIST: !Ref dialList
+
+
 
   SaveResults:
     Type: AWS::Serverless::Function 
@@ -423,49 +597,69 @@ Resources:
       Timeout: 600
       Layers:
         - !Ref PowerDialer
+      Environment: 
+        Variables:
+          DIALER_DEPLOYMENT: !Select [4, !Split ['-', !Select [2, !Split ['/', !Ref AWS::StackId]]]]
+          ACTIVE_DIALING: !Ref ActiveDialing
+          RESULTS_BUCKET: !Ref resultsbucket
 
-  InitializeDB:
-    Type: Custom::InitializeDialer
+  ProcessContactEvents:
+    Type: AWS::Serverless::Function 
     Properties:
-      ServiceToken: !GetAtt initializeTable.Arn
-      CONFIG_TABLE: !Ref DialerConfig
-      IOBUCKET: !Ref iobucket
-      ACTIVE_DIALING_TABLE: !Ref ActiveDialing
-      DIALER_LIST: !Ref dialList
+      Role: !GetAtt PowerDialerLambdaRole.Arn
+      CodeUri: PowerDialer-ProcessContactEvents/
+      Handler: lambda_function.lambda_handler
+      Runtime: python3.8
+      MemorySize: 512
+      Timeout: 600
+      Layers:
+        - !Ref PowerDialer
+      Environment: 
+        Variables:
+          ACTIVE_DIALING: !Ref ActiveDialing
+  
+  ContactEventsRule:
+    Type: AWS::Events::Rule
+    Properties: 
+      Description: Amazon Connect contact disconnection events monitor 
+      EventPattern: {"source": ["aws.connect"],"detail-type": ["Amazon Connect Contact Event"],"detail": {"eventType": ["DISCONNECTED"]}}
+      Name: !Join ['-', ['connect-events', !Select [4, !Split ['-', !Select [2, !Split ['/', !Ref AWS::StackId]]]]]]
+      State: ENABLED
+      Targets: 
+        - 
+          Arn: !GetAtt ProcessContactEvents.Arn
+          Id: 'ConnectContactDisconnects'
+  
+  EventBridgeLambdaPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !GetAtt ProcessContactEvents.Arn
+      Action: lambda:InvokeFunction
+      Principal: events.amazonaws.com
+      SourceArn: !GetAtt ContactEventsRule.Arn
+
+  CampaignLaunchSchedule:
+    Type: AWS::Events::Rule
+    Properties:
+      Description: "Initiate dialer campaign"
+      ScheduleExpression: 'cron(0 14 ? * MON-SUN *)'
+      State: 'DISABLED'
+      Targets:
+        -
+          Id: "CampaignStarter"
+          RoleArn: !GetAtt CampaignLauncherRole.Arn
+          Arn: !GetAtt DialerControlSF.Arn
 
 Outputs:
-  iobucket:
+  InputBucket:
     Description: "Bucket for List Loading and Results generation"
-    Value: !Ref iobucket  
-  dial:
-    Description: "PowerDialer-dial Lambda Function ARN"
-    Value: !GetAtt dial.Arn
-  getAvailAgents:
-    Description: "PowerDialer-getAvailAgents Lambda Function ARN"
-    Value: !GetAtt getAvailAgents.Arn
-  getConfig:
-    Description: "PowerDialer-getConfig Lambda Function ARN"
-    Value: !GetAtt getConfig.Arn
-  getContacts:
-    Description: "PowerDialer-getContacts Lambda Function ARN"
-    Value: !GetAtt getContacts.Arn
-  ListLoad:
-    Description: "PowerDialer-ListLoad Lambda Function ARN"
-    Value: !GetAtt ListLoad.Arn
-  ProcessAgentsEvents:
-    Description: "PowerDialer-ProcessAgentsEvents Lambda Function ARN"
-    Value: !GetAtt ProcessAgentsEvents.Arn
-  SaveResults:
-    Description: "PowerDialer-SaveResults Lambda Function ARN"
-    Value: !GetAtt SaveResults.Arn
-
-  getAvailAgentsRole:
-    Description: "Lambda Functions Role"
-    Value: !GetAtt PowerDialerLambdaRole.Arn
-  DialThreadStepFunctionsRole:
-    Description: "StepFunctions Role ARN"
-    Value: !GetAtt ThreadSFRole.Arn
-  ControlStepFunctionsRole:
-    Description: "StepFunctions Role ARN"
-    Value: !GetAtt ControlSFRole.Arn
-  
+    Value: !Ref dialinglistbucket 
+  ConnectConfigConnectId:
+    Description: "Connect - Instance Id parameter"
+    Value: !Ref parameterConnectId
+  ConnectConfigQueue:
+    Description: "Connect - Queue parameter"
+    Value: !Ref parameterQueue 
+  ConnectConfigContactFlow:
+    Description: "Connect - ContactFlow Id parameter"
+    Value: !Ref parameterContactFlow

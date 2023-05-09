@@ -10,9 +10,9 @@ def lambda_handler(event, context):
     s3_client = boto3.client('s3')
     dynamodb = boto3.client('dynamodb')
     print(event)
-    configTable = event["config"]["dialerconfigtable"]
-    dialerList = get_config('table-dialerlist', configTable)
-    bucket = get_config('iobucket', configTable)
+    DIALER_DEPLOYMENT = os.environ['DIALER_DEPLOYMENT']
+    dialerList = get_config('table-dialerlist', DIALER_DEPLOYMENT)
+    bucket = get_config('ResultsBucket', DIALER_DEPLOYMENT)
     
     response = dynamodb.scan(
         TableName=dialerList,

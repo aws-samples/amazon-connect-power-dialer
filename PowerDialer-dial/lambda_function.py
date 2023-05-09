@@ -9,18 +9,18 @@ from boto3.dynamodb.conditions import Key
 
 def lambda_handler(event, context):
     print(str(event))
-    DIALER_CONFIG_TABLE = event['config']['dialerconfigtable']
-    DIALER_LIST_TABLE=event['params']['table-dialerlist']
-    ACTIVE_DIALING_TABLE=event['params']['table-activedialing']
+    
+    ACTIVE_DIALING_TABLE = os.environ['ACTIVE_DIALING_TABLE']
     
     contactFlow = event['params']['contactflow']
     connectID = event['params']['connectid']
     queue = event['params']['queue']
     TASK_TOKEN = event['TaskToken']
     phone = event['contacts']['phone']
+    attributes = event['contacts']['attributes']
+    attributes['index'] = str(event['contacts']['index'])
     
-    
-    response = place_call(phone, contactFlow, connectID, queue)
+    response = place_call(phone, contactFlow, connectID, queue,attributes)
     
     if(response):
         print("Valid response - Updating TOKEN")

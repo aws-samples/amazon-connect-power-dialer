@@ -24,14 +24,18 @@ Roles for the Lambda Functions and Step Functions State Machines are defined in 
 The project includes a cloud formation template with a Serverless Application Model (SAM) transform to deploy resources as follows:
 
 ### AWS Lambda functions
+- InputBucket: Used for list loading based on CSV files (Refer to the sample files for the structure). Fields custID and phone are mandatory. Additional fields are populated as attributes while placing calls.
+- Resultsbucket: Storage for campaign results.
 
-- initializeTable: Provides a one-off function to load the initial parameters for required tables.
+### AWS Lambda functions
+
 - dial: Places calls using Amazon Connect boto3's start_outbound_voice_contact method.
 - getAvailAgents: Gets agents available in the associated queue.
 - getConfig: Gets the configuration parameters from a DynamoDB table.
 - getContacts: Gets contact phone numbers to dial from a DynamoDB table.
 - ListLoad: Loads dialing list from a CSV file to DynamoDB.
-- ProcessAgentsEvents: Processes Agent Events to identify status changes and determine when would the next call should be placed.
+- ProcessContactEvents: Processes Contact Events to determine when would the next call should be placed.
+- SetDisposition: Process agent input based on a step by step guide contact flow to categorize calls.
 - SaveResults: Generates a CSV file based from the dialing attempts.
 
 
@@ -42,8 +46,20 @@ The project includes a cloud formation template with a Serverless Application Mo
 
 ### DynamoDB tables
 - ActiveDialing: ContactIds to dialed contact relationship for contacts being dialed.
-- DialerConfig: Parameters for the dialer opperation.
 - dialList: Dialing list for the contacts.
+
+### System Manager Paramater Store Parameters
+Configuration information is stored as parameters in System Manager Parameter Store. The following parameters require configuration to match Connect configuration.
+- /connect/dialer/XXXX/connectid. Connect Instance Id (not ARN).
+- /connect/dialer/XXXX/contactflow. Contact Flow Id (not ARN).
+- /connect/dialer/XXXX/queue. Amazon Connect Outbound Queue (not ARN).
+
+- /connect/dialer/XXXX/ResultsBucket. Output bucket for results. Populated at set up time.
+- /connect/dialer/XXXX/activeDialer. On/Off switch for dialer opperation. Managed by State machines.
+- /connect/dialer/XXXX/dialIndex. index position within list.
+- /connect/dialer/XXXX/table-activedialing. Active numbers processing calls.
+- /connect/dialer/XXXX/table-dialerlist. Complete dialing list.
+- /connect/dialer/XXXX/totalRecords. Current number of records to be called.
 
 ### IAM roles
 - ControlSFRole: Dialer Control Step Functions state Machine IAM role.
@@ -80,17 +96,6 @@ SAM can save this information if you plan un doing changes, answer Y when prompt
 
 ## Configure Amazon Connect Agent Events and Contact Trace Records.
 
-Agent activity is monitored using Agent Events, these events are pushed to a Kinesis Stream.
-
-1. Browse to the Amazon Connect console.
-2. Click on the instance alias name (Not on the Access URL).
-3. Go to the Data Streaming section.
-4. Verify the "Enable data streaming" checkbox is ticked or click it to enable streaming.
-5. Under "Contact Trace Records" select Kinesis Stream.
-6. Pick a Kinesis stream if you have set up one for this purpose or click on the "Create new Kinesis stream" to create one. If you're creating one, press the Create a Data Stream button on the Kinesis Console and assign a name ("AmazonConnectAgentEvents" for example) and a shard of 1 (you can update this value later) based on throughput.
-6. Under Agent Events, pick the same Kinesis Stream. If you need different streams based on other applications, you can create 2 Kinesis streams and have them associated to each category of events. Later in the configuration, when you assign the trigger for the Agent Events Processing Lambda Function, make sure you set up both Kiinesis Streams as triggers.
-7. Once the Kinesis Stream is set up, go back to Amazon Connect Console and select the recently created Stream, save the changes.
-
 
 ## Get Amazon Connect Configuration
 
@@ -112,38 +117,42 @@ Make sure you replace the values for contactflow, phone numberm, queue and insta
 
 ## Configure Dialer Parameters
 
-1. Navigate to the DynamoDB console and open the table named: "ConnectPD-DialerConfig".
-2. Create entries for the following Items with the corresponding values. Note this items are case sensitive. The associated value must be specified with a "currentValue" attribute (also case sensitive).
+1. Navigate to the System Manager - Parameter Store console.
+2. Modify the values for the following items . Note this items are case sensitive.
 
 | parameter   | currentValue |
 |----------|:-------------:|
-| connectid |  Connect instance ID |
-| contactflow |contactflow ID|
-| inputfile | Dialing list CSV file |
-| io-bucket | Bucket where data will entered|
-|queue|Id of the Connect queue to be used|
-|table-activedialing|ConnectPD-ActiveDialing|
-|table-dialerlist|ConnectPD-dialList|
+| /connect/dialer/XXXX/connectid |  Connect instance ID |
+| /connect/dialer/XXXX/contactflow |contactflow ID|
+|/connect/dialer/XXXX/queue|Id of the Connect queue to be used|
 
+## Setting Disposition Codes
+As part of the deployment, a setDisposition Code function is created. This function will take contactId and attributes set on the dial phase to update the result on the dialing list table.
+The step by step guide contact flow (file , available on the sample files allows for a sample option to generate status and invoke the setDisposition Lambda function to tag associated contacts.
 
-## Set Triggers for Amazon Connect Agent Events
+### Deploy agent guide flow.
+1. From the AWS Services Console, browse to the Amazon Connect service and add the setDisposition Lambda function in Flows->Lambda.
+1. In the Amazon Connect administrator interface create a new contact flow and import the View-Dialer-DispositionCodes sample file. Validate all boxes are configured correctly, save and publish the flow.
+1. Make a note of the contact flow id on the ARN for this contact flow.
+1. Add a Set Contact Attributes block on the ContactFlow used for outbound calls, specify a user defined parameter for DefaultFlowForAgentUI and specify the contact flow id from the previous step.
 
-The agent activity is monitored thanks to the previously configured Kinesis Stream. This will be now configured as a trigger for a specific Lambda Function to process events.
+## Campaign scheduling
 
-1. Go to Applications and select "PowerDialer" or the name you specified when deploying the solution with SAM.
-2. Click on ProcessAgentsEvents from the listed functions.
-3. Click on triggers on the panel Function Overview.
-4. On the Add trigger screen, click on the trigger list and select Kinesis.
-5. Select the Kinesis stream you created previously.
-6. Leave the rest of the parameters as specified by default. Click Add to save this trigger configuration.
- 
+An EventBridge campaign is created as part of the deployment in the disabled state. From Eventbridge console browse to rules and select the <YOUR-STACK-NAME>CampaignLaunchSchedule rule.
+
+1. Click on Edit.
+2. Specify the required launch times for this campaign.
+3. Keep the selected target DialerControlSF-XXXX.
+4. Save changes and make sure to change the status of the rule to enabled.
+
 ## Operation
 The solution relies on Step Functions as the main orchestation point and Lambda Functions as the processing units. Starting a campaign will include 2 steps:
 1. Loading a dialing list.
 2. Launching a dialing job.
 
 ### Loading a dialing list. 
-To load a list, simply upload the CSV file (example is provided on file [sample-file](/sample-files/sample-load.csv "sample-file") ), point the dialer to this file and invoke the ListLoad function.
+To load a list, simply upload the CSV file (example is provided on file [sample-file](/sample-files/sample-load.csv "sample-file") ) to the input bucket. An automated event will trigger the processing Lambda Function to upload the records. Be aware large files might consume a lot of time and might timeout on the Labda Function.
+
 
 #### Uploading the file 
 1. Generate a CSV file with the same structure as the example.
@@ -152,42 +161,24 @@ To load a list, simply upload the CSV file (example is provided on file [sample-
 5. Click on the link for the iobucket name, a new window will open showing the bucket.
 6. Click on the upload file and uplaod the file you created.
 
-#### Configuring dialer
-1. Navigate to the DynamoDB console and select the table named ConnectPD-DialerConfig.
-2. Click on create item.
-3. Specify the following parameter and currentValue. Pay attention as everything (key, attribute and value names) is case sensitive.
-
-| parameter   | currentValue |
-|----------|:-------------:|
-| inputfile | CSV Filename with extension |
-
-#### Invoking ListLoad Function
-1. Navigate to the Lambda console.
-2. Click on Applications and select "PowerDialer" or the name you used for the application.
-3. Click on the ListLoad function name.
-4. Click on the Test category. 
-5. Now click on the Test button. This will initiate the load. The processing time will depend entirely on the number of entries on the list.
-
 ### Launching a dialing job.
-The process to start the dialing job is through the Power Dialer Control Step Function, initiate an execution to launch the dialing job.
+The process to start the dialing job is through the Power Dialer Control Step Function, initiate an execution to launch the dialing job or by means of scheduling recurring campaign.
 
 1. Navigate to the StepFunctions console.
 2. Pick the Control Step Machine, it should have a name similar to: "DialerControlSF-XXXXXXXX".
 3. Click Start Execution. A "Start Execution Window" will open, click Start Execution once again. This will start the dialing job, placing calls and adding them to the queue. Once completed, a report will be downloaded from the DynamoDB table to the s3 iobucket.
 
 ### Stopping a  dialing job
-To stop the dialing job gracefully, got to the DialerConfig DynamoDB table and change the parameter ActiveDialer to false.
+To stop the dialing job gracefully, got to Systems Manager Parameter Store and change the parameter /connect/dialer/XXXX/activeDialer to False.
 
 
 ### Initiating a new dialing job
-The dialing process marks each contact attempt on the dialing table as the way to keep track on the process, by the end of the dialing process all contacts on the table are marked as "attempted".
-To reinitiate a dialing job to the same set of users, invoke the ListLoad Lambda function to reload the contacts with a reset state. 
+The dialing process marks each contact attempt on the dialing table as the way to keep track on the process, by the end of the dialing process all contacts on the table are marked as "attempted".Contacts need to be repopulated (by loading a new file or marking the specific contacts callAttempt parameter as False).
 
 ### About the inner workings.
 1. The state machine will iterate over the dialing list, pulling contacts as agents become available. Bear in mind the Agent event stream processing function expects agents to become available before placing a new call. Also, it takes a couple of seconds once the agent sets its status to "Available" before the event is published.
 2. The StepFunctions machine will invoke dialing workers based on the number of agents in Available State by the time the process starts. This dialing workers fetch contacts from the dialing list, place calls and wait for agents status changes to iterate over a new contact. There's a relationship of 1:1 of workers to the number of agents.
 3. Once a dialing worker reaches the end of the list, the activeDialer paramter is set to false in the dialer configuration table. This stops all subsequent fetching attempt and finalized the dialing process. You can manually set the activeDialer attribute to false to stop the dialing process.
-4. 
 
 ## Resource deletion
 1. Remove any folders from the iobucket. You can browse to the S3 bucket (click on CloudFormation iobucket link on the resources tab for this stack), select all objects and click on delete.
