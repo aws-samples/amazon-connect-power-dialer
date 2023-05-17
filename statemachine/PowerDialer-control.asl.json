@@ -156,7 +156,7 @@
           "Next": "Dialer"
         }
       ],
-      "Default": "inactivateDialer"
+      "Default": "deactivateDialer"
     },
     "Dialer": {
       "Type": "Map",
@@ -194,26 +194,27 @@
           }
         }
       },
-      "Next": "SaveResults"
+      "Next": "deactivateDialer"
     },
-    "SaveResults": {
-      "Comment": "Copy Results to S3.",
+    "deactivateDialer": {
+      "Comment": "Deactivate dialer",
       "Type": "Task",
-      "Resource": "arn:aws:states:::lambda:invoke",
-      "Catch": [
-        {
-          "ErrorEquals": [
-            "States.ALL"
-          ],
-          "Next": "dialerError"
-        }
-      ],
+      "Resource": "arn:aws:states:::aws-sdk:ssm:putParameter",
       "Parameters": {
-        "FunctionName": "${PowerDialerSaveResultsArn}",
-        "Payload": {
-          "config.$": "$.config"
-        }
+        "Name": "${ParameterDialerStatus}",
+        "Overwrite":true,
+        "Value": "False"
       },
+      "Next": "dialerFinished"
+    },
+    "dialerFinished": {
+      "Type": "Succeed"
+    },
+    "dialerError": {
+      "Type": "Fail"
+    }
+  }
+}},
       "Next": "dialerFinished"
     },
     "inactivateDialer": {

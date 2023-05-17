@@ -3,7 +3,7 @@ import json
 import boto3
 import os
 import csv
-from powerdialer import get_config, upload_dial_record, update_config
+from powerdialer import get_config, upload_dial_record, update_config, queue_contact
 from urllib.parse import unquote
 
 from boto3.dynamodb.conditions import Key
@@ -13,7 +13,9 @@ client = boto3.client('events')
 def lambda_handler(event, context):
     print(event)
     DIALER_DEPLOYMENT = os.environ['DIALER_DEPLOYMENT']
-    dialerList = get_config('table-dialerlist', DIALER_DEPLOYMENT)
+    SQS_URL= os.environ['SQS_URL']
+
+    #dialerList = get_config('table-dialerlist', DIALER_DEPLOYMENT) ##Previous approach
     
     index = 1
     try:
@@ -22,9 +24,8 @@ def lambda_handler(event, context):
             fileKey = unquote(unquote(rec['s3']['object']['key']))
             bucket = rec['s3']['bucket']['name']
             
-            s3 = boto3.client('s3')
+            #s3 = boto3.client('s3')
             s3_resource = boto3.resource('s3')
-            
             
             s3_object = s3_resource.Object(bucket, fileKey)
             data = s3_object.get()['Body'].read().decode('utf-8').splitlines()
@@ -41,7 +42,8 @@ def lambda_handler(event, context):
                         if (key not in requiredFields):
                             attributes[key]=line[key]
 
-                    upload_dial_record(index,line['custID'],line['phone'], attributes,dialerList)
+                    queue_contact(line['custID'],line['phone'], attributes,SQS_URL)
+                    #upload_dial_record(index,line['custID'],line['phone'], attributes,dialerList)
                     index +=1            
     
             update_config('totalRecords', str(index-1), DIALER_DEPLOYMENT)
@@ -54,15 +56,7 @@ def lambda_handler(event, context):
     return "Succesfully loaded: " + str(index-1) + " total records."
 
 
-
-def add_schedule(schedule,state,ruleName):
-	rule = client.put_rule(
-    Name=ruleName,
-    ScheduleExpression=schedule,
-    State=state
-	)
-
-def get_time_expression(hour,minutes,tzshift):
+get_time_expression(hour,minutes,tzshift):
     utchour = int(hour) + int(tzshift)
     schedule = 'cron(' + minutes + ' ' + str(utchour) + ' ' + '? * MON-FRI *)'
     print(schedule)

@@ -4,7 +4,69 @@ import boto3
 import os
 from datetime import datetime
 from boto3.dynamodb.conditions import Key
+from botocore.exceptions import ClientError
 
+
+    
+def delete_contact(receipt,sqs_url):
+    sqs = boto3.client('sqs')
+    try:
+        sqs.delete_message(
+        QueueUrl=sqs_url,
+        ReceiptHandle=receipt
+        )
+    except ClientError as e:
+        print(e.response['Error'])
+        return False
+    else:
+        return True
+
+
+def save_results(data,partition,streamName):
+    firehose = boto3.client('firehose')
+    try:
+        response = firehose.put_record(
+            DeliveryStreamName=streamName,
+            Record={'Data': json.dumps(data)}
+        )
+        
+    except ClientError as e:
+        print(e.response['Error'])
+        return False
+    else:
+        return response
+
+
+
+
+def queue_contact(custID,phone,attributes,sqs_url):
+    sqs = boto3.client('sqs')
+    try:
+        response = sqs.send_message(
+            QueueUrl=sqs_url,
+            MessageAttributes={
+                'custID': {
+                    'DataType': 'String',
+                    'StringValue': custID
+                },
+                'phone': {
+                    'DataType': 'String',
+                    'StringValue': phone
+                },
+                'attributes': {
+                    'DataType': 'String',
+                    'StringValue': json.dumps(attributes)
+                }
+            },
+            MessageBody=(
+                phone
+            )
+        )
+    except ClientError as e:
+        print(e.response['Error'])
+        return False
+    else:
+        return response['MessageId']
 
 def upload_dial_record(dialIndex,custID,phone,attributes, table):
     dynamodb = boto3.resource('dynamodb')

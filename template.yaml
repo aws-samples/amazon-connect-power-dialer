@@ -256,6 +256,21 @@ Resources:
                     - 'arn:aws:s3:::${resultsbucket}/*'
                     - dialingListBucket: !Join ['-', ['dialer-output-bucket', !Select [4, !Split ['-', !Select [2, !Split ['/', !Ref AWS::StackId]]]]]]
 
+        -
+          PolicyName: ControlStateMachine
+          PolicyDocument:
+            Version: 2012-10-17
+            Statement:
+              -
+                Effect: Allow
+                Action:
+                  - states:DescribeExecution
+                  - states:StartExecution
+                  - states:StopExecution
+                Resource:                   
+                  - !Sub 
+                    - 'arn:aws:states:${AWS::Region}:${AWS::AccountId}:stateMachine:${DialerControlName}'
+                    - DialerControlName: !Join ['-', ['DialerControlSF', !Select [4, !Split ['-', !Select [2, !Split ['/', !Ref AWS::StackId]]]]]]
 
         -
           PolicyName: ConfigTableAccess
@@ -353,7 +368,19 @@ Resources:
                   - 'kms:GenerateDataKey'
                 Resource:
                   - '*'
-  
+        -
+          PolicyName: DataMovement
+          PolicyDocument:
+            Version: 2012-10-17
+            Statement:
+              -
+                Effect: Allow
+                Action:
+                  - 'firehose:*'
+                  - 'kinesis:*'
+                  - 'sqs:*'
+                Resource:
+                  - '*'
   CampaignLauncherRole:
     Type: AWS::IAM::Role
     Properties:
@@ -387,11 +414,39 @@ Resources:
                   - events:PutRule
                   - events:DescribeRule
                 Resource: !Sub arn:aws:events:${AWS::Region}:${AWS::AccountId}:rule/StepFunctionsGetEventsForStepFunctionsExecutionRule
-  
-  
+  KinesisFirehoseDeliveryRole:
+      Type: AWS::IAM::Role
+      Properties:
+        AssumeRolePolicyDocument:
+          Version: "2012-10-17"
+          Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+              - firehose.amazonaws.com
+              - s3.amazonaws.com
+            Action: sts:AssumeRole
+        Path: /
+        Policies:
+          - PolicyName: deliveryToS3
+            PolicyDocument:
+              Version: "2012-10-17"
+              Statement:
+              - Sid: deliveryToS3
+                Effect: Allow
+                Action:
+                - s3:AbortMultipartUpload
+                - s3:GetBucketLocation
+                - s3:GetObject
+                - s3:ListBucket
+                - s3:ListBucketMultipartUploads
+                - s3:PutObject
+                Resource: "*"
+
   DialThreadSF:
     Type: AWS::Serverless::StateMachine
     Properties:
+      Name: !Join ['-', ['DialerThreadSF', !Select [4, !Split ['-', !Select [2, !Split ['/', !Ref AWS::StackId]]]]]]
       DefinitionUri: statemachine/PowerDialer-dialthread.asl.json
       Role: !GetAtt ThreadSFRole.Arn
       DefinitionSubstitutions:
@@ -410,6 +465,7 @@ Resources:
   DialerControlSF:
     Type: AWS::Serverless::StateMachine
     Properties:
+      Name: !Join ['-', ['DialerControlSF', !Select [4, !Split ['-', !Select [2, !Split ['/', !Ref AWS::StackId]]]]]]
       Role: !GetAtt ControlSFRole.Arn
       DefinitionUri: statemachine/PowerDialer-control.asl.json
       DefinitionSubstitutions:
@@ -426,6 +482,29 @@ Resources:
         ParameterDialingList: !Join ['/', ['/connect/dialer', !Select [4, !Split ['-', !Select [2, !Split ['/', !Ref AWS::StackId]]]],'table-dialerlist']]
         ParameterDialerStatus: !Join ['/', ['/connect/dialer', !Select [4, !Split ['-', !Select [2, !Split ['/', !Ref AWS::StackId]]]],'activeDialer']]
         
+  ResultsFirehose:
+    Type: 'AWS::KinesisFirehose::DeliveryStream'
+    Properties:
+      DeliveryStreamType: DirectPut
+      DeliveryStreamName: !Join ['-', ['dialer-results', !Select [4, !Split ['-', !Select [2, !Split ['/', !Ref AWS::StackId]]]]]]
+      S3DestinationConfiguration:
+        BucketARN: !GetAtt resultsbucket.Arn
+        BufferingHints:
+          IntervalInSeconds: '60'
+          SizeInMBs: '10'
+        CompressionFormat: UNCOMPRESSED
+        RoleARN: !GetAtt 
+          - KinesisFirehoseDeliveryRole
+          - Arn
+
+  DialingListQueue:
+    Type: AWS::SQS::Queue
+    Properties:
+      QueueName: !Join ['-', ['dialer', !Select [4, !Split ['-', !Select [2, !Split ['/', !Ref AWS::StackId]]]]]]
+      VisibilityTimeout: 30
+      DelaySeconds: 0
+      MessageRetentionPeriod: 86400
+    
   PowerDialer:
     Type: AWS::Serverless::LayerVersion
     Properties:
@@ -451,6 +530,7 @@ Resources:
           DIALER_DEPLOYMENT: !Select [4, !Split ['-', !Select [2, !Split ['/', !Ref AWS::StackId]]]]
           DIALING_LIST: !Ref dialList
           ACTIVE_DIALING_TABLE: !Ref ActiveDialing
+          RESULTS_FIREHOSE_NAME: !Ref ResultsFirehose
       
   getAvailAgents:
     Type: AWS::Serverless::Function 
@@ -482,6 +562,29 @@ Resources:
       Environment: 
         Variables:
           DIALER_DEPLOYMENT: !Select [4, !Split ['-', !Select [2, !Split ['/', !Ref AWS::StackId]]]]
+          SQS_URL: !Ref DialingListQueue
+
+  queueContacts:
+    Type: AWS::Serverless::Function 
+    Properties:
+      Role: !GetAtt PowerDialerLambdaRole.Arn
+      CodeUri: PowerDialer-queueContacts/
+      Handler: lambda_function.lambda_handler
+      Layers:
+        - !Ref PowerDialer
+      Environment: 
+        Variables:
+          DIALER_DEPLOYMENT: !Select [4, !Split ['-', !Select [2, !Split ['/', !Ref AWS::StackId]]]]
+          SQS_URL: !Ref DialingListQueue
+          SFN_ARN: !Ref DialerControlSF
+          
+  pinpointLambdaPermission:
+      Type: AWS::Lambda::Permission
+      Properties: 
+        Action: 'lambda:InvokeFunction'
+        FunctionName: !Ref queueContacts
+        Principal: 'pinpoint.us-west-2.amazonaws.com'
+        SourceArn: !Sub arn:aws:mobiletargeting:${AWS::Region}:${AWS::AccountId}:apps/*
 
 
   ListLoad:
@@ -497,6 +600,7 @@ Resources:
       Environment: 
         Variables:
           DIALER_DEPLOYMENT: !Select [4, !Split ['-', !Select [2, !Split ['/', !Ref AWS::StackId]]]]
+          SQS_URL: !Ref DialingListQueue
       Events:
         LoadFileEvent:
           Type: S3
@@ -509,6 +613,14 @@ Resources:
                   - Name: suffix
                     Value: ".csv"    
 
+  contactSource:
+    Type: AWS::SSM::Parameter
+    Properties: 
+      Name: !Join ['/', ['/connect/dialer', !Select [4, !Split ['-', !Select [2, !Split ['/', !Ref AWS::StackId]]]],'contact-source']]
+      Type: String
+      Value: 's3'
+  
+  
   parameterIndex:
     Type: AWS::SSM::Parameter
     Properties: 
@@ -521,7 +633,7 @@ Resources:
     Properties: 
       Name: !Join ['/', ['/connect/dialer', !Select [4, !Split ['-', !Select [2, !Split ['/', !Ref AWS::StackId]]]],'activeDialer']]
       Type: String
-      Value: '0'  
+      Value: 'False'  
 
   parameterTotalRecords:
     Type: AWS::SSM::Parameter
@@ -571,6 +683,7 @@ Resources:
       Type: String
       Value: 'Replace with Queue ID'
 
+
   SetDispositionCode:
     Type: AWS::Serverless::Function 
     Properties:
@@ -583,6 +696,7 @@ Resources:
         Variables:
           DIALER_DEPLOYMENT: !Select [4, !Split ['-', !Select [2, !Split ['/', !Ref AWS::StackId]]]]
           DIALING_LIST: !Ref dialList
+          RESULTS_FIREHOSE_NAME: !Ref ResultsFirehose
 
 
 
