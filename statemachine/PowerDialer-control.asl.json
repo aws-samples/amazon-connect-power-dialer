@@ -214,25 +214,4 @@
       "Type": "Fail"
     }
   }
-}},
-      "Next": "dialerFinished"
-    },
-    "inactivateDialer": {
-      "Comment": "Deactivate dialer",
-      "Type": "Task",
-      "Resource": "arn:aws:states:::aws-sdk:ssm:putParameter",
-      "Parameters": {
-        "Name": "${ParameterDialerStatus}",
-        "Overwrite":true,
-        "Value": "False"
-      },
-      "Next": "dialerFinished"
-    },
-    "dialerFinished": {
-      "Type": "Succeed"
-    },
-    "dialerError": {
-      "Type": "Fail"
-    }
-  }
 }
