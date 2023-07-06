@@ -583,7 +583,7 @@ Resources:
       Properties: 
         Action: 'lambda:InvokeFunction'
         FunctionName: !Ref queueContacts
-        Principal: 'pinpoint.us-west-2.amazonaws.com'
+        Principal: !Sub pinpoint.${AWS::Region}.amazonaws.com
         SourceArn: !Sub arn:aws:mobiletargeting:${AWS::Region}:${AWS::AccountId}:apps/*
 
 
