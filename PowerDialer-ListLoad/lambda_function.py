@@ -54,10 +54,3 @@ def lambda_handler(event, context):
         raise e
     
     return "Succesfully loaded: " + str(index-1) + " total records."
-
-
-get_time_expression(hour,minutes,tzshift):
-    utchour = int(hour) + int(tzshift)
-    schedule = 'cron(' + minutes + ' ' + str(utchour) + ' ' + '? * MON-FRI *)'
-    print(schedule)
-    return (schedule)
