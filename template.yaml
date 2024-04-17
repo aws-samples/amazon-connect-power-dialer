@@ -7,7 +7,7 @@ Globals:
   Function:
     Timeout: 60
     MemorySize: 128
-    Runtime: python3.8
+    Runtime: python3.9
     ReservedConcurrentExecutions: 5
 
 Resources:
@@ -510,11 +510,11 @@ Resources:
     Properties:
       ContentUri: PowerDialer-layer/
       CompatibleRuntimes:
-        - python3.6
-        - python3.7
-        - python3.8
+        - python3.9
+        - python3.10
+        - python3.11
     Metadata:
-      BuildMethod: python3.8
+      BuildMethod: python3.9
 
 
   dial:
@@ -706,7 +706,6 @@ Resources:
       Role: !GetAtt PowerDialerLambdaRole.Arn
       CodeUri: PowerDialer-SaveResults/
       Handler: lambda_function.lambda_handler
-      Runtime: python3.8
       MemorySize: 512
       Timeout: 600
       Layers:
@@ -723,7 +722,6 @@ Resources:
       Role: !GetAtt PowerDialerLambdaRole.Arn
       CodeUri: PowerDialer-ProcessContactEvents/
       Handler: lambda_function.lambda_handler
-      Runtime: python3.8
       MemorySize: 512
       Timeout: 600
       Layers:
