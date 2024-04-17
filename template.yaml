@@ -9,9 +9,18 @@ Globals:
     MemorySize: 128
     Runtime: python3.9
     ReservedConcurrentExecutions: 5
+Parameters:
+  ConnectInstanceId:
+    Type: String
+    Description: Amazon Connect Instance ID to use for the outbound call
+  ConnectContactFlowId:
+    Type: String
+    Description: Amazon Connect Contact Flow ID to use for the outbound call
+  ConnectQueueId:
+    Type: String
+    Description: Amazon Connect Queue ID to use for the outbound call
 
 Resources:
-
   dialinglistbucket:
     Type: AWS::S3::Bucket
     Properties:
@@ -661,7 +670,7 @@ Resources:
     Properties: 
       Name: !Join ['/', ['/connect/dialer', !Select [4, !Split ['-', !Select [2, !Split ['/', !Ref AWS::StackId]]]],'contactflow']]
       Type: String
-      Value: 'Replace with Connect outbound contact flow.'
+      Value: !Ref ConnectContactFlowId
 
   parameterOutputBucket:
     Type: AWS::SSM::Parameter
@@ -675,13 +684,13 @@ Resources:
     Properties: 
       Name: !Join ['/', ['/connect/dialer', !Select [4, !Split ['-', !Select [2, !Split ['/', !Ref AWS::StackId]]]],'connectid']]
       Type: String
-      Value: 'Replace with Connect Instance ID'
+      Value: !Ref ConnectInstanceId
   parameterQueue:
     Type: AWS::SSM::Parameter
     Properties: 
       Name: !Join ['/', ['/connect/dialer', !Select [4, !Split ['-', !Select [2, !Split ['/', !Ref AWS::StackId]]]],'queue']]
       Type: String
-      Value: 'Replace with Queue ID'
+      Value: !Ref ConnectQueueId
 
 
   SetDispositionCode:
