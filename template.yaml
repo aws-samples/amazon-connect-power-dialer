@@ -406,6 +406,9 @@ Resources:
                 Effect: Allow
                 Action:
                   - 'mobiletargeting:GetVoiceTemplate'
+                  - 'mobiletargeting:GetCampaign'
+                  - 'mobiletargeting:GetSegment'
+                  - 'mobiletargeting:PhoneNumberValidate'
                 Resource:
                   - '*'
   CampaignLauncherRole:
@@ -709,6 +712,18 @@ Resources:
       Name: !Join ['/', ['/connect/dialer', !Select [4, !Split ['-', !Select [2, !Split ['/', !Ref AWS::StackId]]]],'queue']]
       Type: String
       Value: !Ref ConnectQueueId
+  parameterCountryCode:
+    Type: AWS::SSM::Parameter
+    Properties: 
+      Name: !Join ['/', ['/connect/dialer', !Select [4, !Split ['-', !Select [2, !Split ['/', !Ref AWS::StackId]]]],'countrycode']]
+      Type: String
+      Value: !Ref CountryCode
+  parameterISOCountryCode:
+    Type: AWS::SSM::Parameter
+    Properties: 
+      Name: !Join ['/', ['/connect/dialer', !Select [4, !Split ['-', !Select [2, !Split ['/', !Ref AWS::StackId]]]],'isocountrycode']]
+      Type: String
+      Value: !Ref ISOCountryCode
 
 
   SetDispositionCode:
