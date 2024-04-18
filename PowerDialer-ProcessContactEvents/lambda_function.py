@@ -6,6 +6,8 @@ import os
 from powerdialer import get_token, sendSuccessToken, remove_contactId
 from boto3.dynamodb.conditions import Key
 
+ACTIVE_DIALING = os.environ['ACTIVE_DIALING']
+
 
 def lambda_handler(event, context):
     if(event['detail'].get('eventType') =='DISCONNECTED'):
@@ -18,6 +20,7 @@ def lambda_handler(event, context):
             print("Token:" + token)
             try:
                 sendresult = sendSuccessToken(token,contactId)
+                remove_contactId(contactId,ACTIVE_DIALING)
             except Exception as e:
                     print (e)
             else:

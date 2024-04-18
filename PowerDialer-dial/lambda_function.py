@@ -10,6 +10,7 @@ from boto3.dynamodb.conditions import Key
 def lambda_handler(event, context):
     print(str(event))
     
+    ACTIVE_DIALING_TABLE = os.environ['ACTIVE_DIALING_TABLE']
     DIALER_DEPLOYMENT = os.environ['DIALER_DEPLOYMENT']
     RESULTS_FIREHOSE_NAME = os.environ['RESULTS_FIREHOSE_NAME']
     
@@ -19,6 +20,7 @@ def lambda_handler(event, context):
     TASK_TOKEN = event['TaskToken']
     phone = event['contacts']['phone']
     attributes = event['contacts']['attributes']
+    #attributes['index'] = str(event['contacts']['index'])
     
     response = place_call(phone, contactFlow, connectID, queue,attributes)
     
@@ -26,6 +28,7 @@ def lambda_handler(event, context):
         print("Valid response - Updating TOKEN")
         contactId = response['ContactId']
         validNumber= True
+        updateActiveDialing(contactId, TASK_TOKEN, phone,ACTIVE_DIALING_TABLE)
         results = {'phone':phone,'validNumber':True,'contactId':contactId}
     else:
         print("Invalid response - Clearing TASK")

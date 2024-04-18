@@ -9,25 +9,9 @@ Globals:
     MemorySize: 128
     Runtime: python3.9
     ReservedConcurrentExecutions: 5
-Parameters:
-  ConnectInstanceId:
-    Type: String
-    Description: Amazon Connect Instance ID to use for the outbound call
-  ConnectContactFlowId:
-    Type: String
-    Description: Amazon Connect Contact Flow ID to use for the outbound call
-  ConnectQueueId:
-    Type: String
-    Description: Amazon Connect Queue ID to use for the outbound call
-  CountryCode:
-    Type: String
-    Description: Country code of destination country
-  ISOCountryCode:
-    Type: String
-    Description: 2 letter code for country code
-    
 
 Resources:
+
   dialinglistbucket:
     Type: AWS::S3::Bucket
     Properties:
@@ -39,25 +23,6 @@ Resources:
     Properties:
       BucketName: !Join ['-', ['dialer-output-bucket', !Select [4, !Split ['-', !Select [2, !Split ['/', !Ref AWS::StackId]]]]]]
     DeletionPolicy: Delete
-    
-  dialList: 
-    Type: AWS::DynamoDB::Table
-    Properties: 
-      AttributeDefinitions: 
-        - 
-          AttributeName: "seqID"
-          AttributeType: "N"
-
-      KeySchema: 
-        - 
-          AttributeName: "seqID"
-          KeyType: "HASH"
-
-      BillingMode: "PAY_PER_REQUEST"
-      PointInTimeRecoverySpecification:
-        PointInTimeRecoveryEnabled: True
-      SSESpecification:
-        SSEEnabled: True
 
   ActiveDialing:
     Type: AWS::DynamoDB::Table
@@ -125,8 +90,7 @@ Resources:
                   - 'dynamodb:Query'
                   - 'dynamodb:UpdateItem'
                 Resource:
-                  - !GetAtt ActiveDialing.Arn
-                  - !GetAtt dialList.Arn      
+                  - !GetAtt ActiveDialing.Arn   
         -
           PolicyName: ControlStateMachine
           PolicyDocument:
@@ -200,7 +164,6 @@ Resources:
                   - 'dynamodb:UpdateItem'
                 Resource:
                   - !GetAtt ActiveDialing.Arn
-                  - !GetAtt dialList.Arn      
         -
           PolicyName: InvokeLambdaFunctions
           PolicyDocument:
@@ -304,7 +267,6 @@ Resources:
                   - 'dynamodb:UpdateItem'
                 Resource:
                   - !GetAtt ActiveDialing.Arn
-                  - !GetAtt dialList.Arn
 
         -
           PolicyName: SendTaskToken
@@ -397,20 +359,6 @@ Resources:
                   - 'sqs:*'
                 Resource:
                   - '*'
-        -
-          PolicyName: PinpointAccess
-          PolicyDocument:
-            Version: 2012-10-17
-            Statement:
-              -
-                Effect: Allow
-                Action:
-                  - 'mobiletargeting:GetVoiceTemplate'
-                  - 'mobiletargeting:GetCampaign'
-                  - 'mobiletargeting:GetSegment'
-                  - 'mobiletargeting:PhoneNumberValidate'
-                Resource:
-                  - '*'
   CampaignLauncherRole:
     Type: AWS::IAM::Role
     Properties:
@@ -489,7 +437,6 @@ Resources:
         ParameterIndex: !Join ['/', ['/connect/dialer', !Select [4, !Split ['-', !Select [2, !Split ['/', !Ref AWS::StackId]]]],'dialIndex']]
         ParameterTotalRecords: !Join ['/', ['/connect/dialer', !Select [4, !Split ['-', !Select [2, !Split ['/', !Ref AWS::StackId]]]],'totalRecords']]
         ParameterActiveDialing: !Join ['/', ['/connect/dialer', !Select [4, !Split ['-', !Select [2, !Split ['/', !Ref AWS::StackId]]]],'table-activedialing']]
-        ParameterDialingList: !Join ['/', ['/connect/dialer', !Select [4, !Split ['-', !Select [2, !Split ['/', !Ref AWS::StackId]]]],'table-dialerlist']]
         ParameterDialerStatus: !Join ['/', ['/connect/dialer', !Select [4, !Split ['-', !Select [2, !Split ['/', !Ref AWS::StackId]]]],'activeDialer']]
 
   DialerControlSF:
@@ -509,7 +456,6 @@ Resources:
         ParameterIndex: !Join ['/', ['/connect/dialer', !Select [4, !Split ['-', !Select [2, !Split ['/', !Ref AWS::StackId]]]],'dialIndex']]
         ParameterTotalRecords: !Join ['/', ['/connect/dialer', !Select [4, !Split ['-', !Select [2, !Split ['/', !Ref AWS::StackId]]]],'totalRecords']]
         ParameterActiveDialing: !Join ['/', ['/connect/dialer', !Select [4, !Split ['-', !Select [2, !Split ['/', !Ref AWS::StackId]]]],'table-activedialing']]
-        ParameterDialingList: !Join ['/', ['/connect/dialer', !Select [4, !Split ['-', !Select [2, !Split ['/', !Ref AWS::StackId]]]],'table-dialerlist']]
         ParameterDialerStatus: !Join ['/', ['/connect/dialer', !Select [4, !Split ['-', !Select [2, !Split ['/', !Ref AWS::StackId]]]],'activeDialer']]
         
   ResultsFirehose:
@@ -543,6 +489,7 @@ Resources:
         - python3.9
         - python3.10
         - python3.11
+        - python3.12
     Metadata:
       BuildMethod: python3.9
 
@@ -558,6 +505,7 @@ Resources:
       Environment: 
         Variables:
           DIALER_DEPLOYMENT: !Select [4, !Split ['-', !Select [2, !Split ['/', !Ref AWS::StackId]]]]
+          ACTIVE_DIALING_TABLE: !Ref ActiveDialing
           RESULTS_FIREHOSE_NAME: !Ref ResultsFirehose
       
   getAvailAgents:
@@ -611,7 +559,7 @@ Resources:
       Properties: 
         Action: 'lambda:InvokeFunction'
         FunctionName: !Ref queueContacts
-        Principal: !Sub pinpoint.${AWS::Region}.amazonaws.com
+        Principal: 'pinpoint.us-west-2.amazonaws.com'
         SourceArn: !Sub arn:aws:mobiletargeting:${AWS::Region}:${AWS::AccountId}:apps/*
 
 
@@ -677,19 +625,12 @@ Resources:
       Type: String
       Value: !Ref ActiveDialing
 
-  parameterDialingList:
-    Type: AWS::SSM::Parameter
-    Properties: 
-      Name: !Join ['/', ['/connect/dialer', !Select [4, !Split ['-', !Select [2, !Split ['/', !Ref AWS::StackId]]]],'table-dialerlist']]
-      Type: String
-      Value: !Ref dialList
-
   parameterContactFlow:
     Type: AWS::SSM::Parameter
     Properties: 
       Name: !Join ['/', ['/connect/dialer', !Select [4, !Split ['-', !Select [2, !Split ['/', !Ref AWS::StackId]]]],'contactflow']]
       Type: String
-      Value: !Ref ConnectContactFlowId
+      Value: 'Replace with Connect outbound contact flow.'
 
   parameterOutputBucket:
     Type: AWS::SSM::Parameter
@@ -703,25 +644,13 @@ Resources:
     Properties: 
       Name: !Join ['/', ['/connect/dialer', !Select [4, !Split ['-', !Select [2, !Split ['/', !Ref AWS::StackId]]]],'connectid']]
       Type: String
-      Value: !Ref ConnectInstanceId
+      Value: 'Replace with Connect Instance ID'
   parameterQueue:
     Type: AWS::SSM::Parameter
     Properties: 
       Name: !Join ['/', ['/connect/dialer', !Select [4, !Split ['-', !Select [2, !Split ['/', !Ref AWS::StackId]]]],'queue']]
       Type: String
-      Value: !Ref ConnectQueueId
-  parameterCountryCode:
-    Type: AWS::SSM::Parameter
-    Properties: 
-      Name: !Join ['/', ['/connect/dialer', !Select [4, !Split ['-', !Select [2, !Split ['/', !Ref AWS::StackId]]]],'countrycode']]
-      Type: String
-      Value: !Ref CountryCode
-  parameterISOCountryCode:
-    Type: AWS::SSM::Parameter
-    Properties: 
-      Name: !Join ['/', ['/connect/dialer', !Select [4, !Split ['-', !Select [2, !Split ['/', !Ref AWS::StackId]]]],'isocountrycode']]
-      Type: String
-      Value: !Ref ISOCountryCode
+      Value: 'Replace with Queue ID'
 
 
   SetDispositionCode:
@@ -735,7 +664,6 @@ Resources:
       Environment: 
         Variables:
           DIALER_DEPLOYMENT: !Select [4, !Split ['-', !Select [2, !Split ['/', !Ref AWS::StackId]]]]
-          DIALING_LIST: !Ref dialList
           RESULTS_FIREHOSE_NAME: !Ref ResultsFirehose
 
 
@@ -746,6 +674,7 @@ Resources:
       Role: !GetAtt PowerDialerLambdaRole.Arn
       CodeUri: PowerDialer-SaveResults/
       Handler: lambda_function.lambda_handler
+      Runtime: python3.8
       MemorySize: 512
       Timeout: 600
       Layers:
@@ -762,6 +691,7 @@ Resources:
       Role: !GetAtt PowerDialerLambdaRole.Arn
       CodeUri: PowerDialer-ProcessContactEvents/
       Handler: lambda_function.lambda_handler
+      Runtime: python3.8
       MemorySize: 512
       Timeout: 600
       Layers:
