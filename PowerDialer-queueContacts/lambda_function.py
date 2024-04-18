@@ -30,6 +30,8 @@ def lambda_handler(event, context):
         body = get_message(templateMessage,user)
         campaignDetails = get_campaign_details(event['ApplicationId'],event['CampaignId'])
 
+        
+        
         attributes={
           'prompt': body,
           'campaignId': event['CampaignId'],
@@ -39,10 +41,12 @@ def lambda_handler(event, context):
           'campaingStartTime': campaignDetails['StartTime'],
           'endpointId':key
           }
-        data = get_endpoint_data(endpoints[key])
+    
         
+        data = get_endpoint_data(endpoints[key])
         if('attributes' in data):
-          attributes.update(data['attributes'])
+            attributes.update(data['attributes'])
+        
         if(data):
           validated_number = validate_endpoint(data['phone'],countrycode,isocountrycode)
           
@@ -50,7 +54,7 @@ def lambda_handler(event, context):
             attributes['phonetype']=validated_number['PhoneType']
             try:
               print("Queuing",'+'+countrycode+data['phone'],data['custID'],attributes)
-              queue_contact(data['custID'],'+'+countrycode+data['phone'],data['attributes'],SQS_URL)
+              queue_contact(data['custID'],'+'+countrycode+data['phone'],attributes,SQS_URL)
             except Exception as e:
                 print("Failed to queue")
                 print(e)
@@ -95,7 +99,7 @@ def get_endpoint_data(endpoint):
         
     if ('UserId' in endpoint['User']):
         userDetails['custID'] = endpoint['User'].get('UserId',None)
-        print("there is a UserId")
+        
         
     if ('UserAttributes' in endpoint['User'] and endpoint['User']['UserAttributes']):
       for attribkey in endpoint['User']['UserAttributes'].keys():
