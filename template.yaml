@@ -674,7 +674,6 @@ Resources:
       Role: !GetAtt PowerDialerLambdaRole.Arn
       CodeUri: PowerDialer-SaveResults/
       Handler: lambda_function.lambda_handler
-      Runtime: python3.8
       MemorySize: 512
       Timeout: 600
       Layers:
@@ -691,7 +690,6 @@ Resources:
       Role: !GetAtt PowerDialerLambdaRole.Arn
       CodeUri: PowerDialer-ProcessContactEvents/
       Handler: lambda_function.lambda_handler
-      Runtime: python3.8
       MemorySize: 512
       Timeout: 600
       Layers:
