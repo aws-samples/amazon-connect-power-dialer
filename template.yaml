@@ -558,8 +558,6 @@ Resources:
       Environment: 
         Variables:
           DIALER_DEPLOYMENT: !Select [4, !Split ['-', !Select [2, !Split ['/', !Ref AWS::StackId]]]]
-          DIALING_LIST: !Ref dialList
-          ACTIVE_DIALING_TABLE: !Ref ActiveDialing
           RESULTS_FIREHOSE_NAME: !Ref ResultsFirehose
       
   getAvailAgents:
