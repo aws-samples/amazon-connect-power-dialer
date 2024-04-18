@@ -8,7 +8,23 @@ Globals:
     Timeout: 60
     MemorySize: 128
     Runtime: python3.9
-    ReservedConcurrentExecutions: 5
+
+Parameters:
+  ConnectInstanceId:
+    Type: String
+    Description: Amazon Connect Instance ID to use for the outbound call
+  ConnectContactFlowId:
+    Type: String
+    Description: Amazon Connect Contact Flow ID to use for the outbound call
+  ConnectQueueId:
+    Type: String
+    Description: Amazon Connect Queue ID to use for the outbound call
+  CountryCode:
+    Type: String
+    Description: Country code of destination country
+  ISOCountryCode:
+    Type: String
+    Description: 2 letter code for country code
 
 Resources:
 
@@ -651,6 +667,18 @@ Resources:
       Name: !Join ['/', ['/connect/dialer', !Select [4, !Split ['-', !Select [2, !Split ['/', !Ref AWS::StackId]]]],'queue']]
       Type: String
       Value: 'Replace with Queue ID'
+  parameterCountryCode:
+    Type: AWS::SSM::Parameter
+    Properties: 
+      Name: !Join ['/', ['/connect/dialer', !Select [4, !Split ['-', !Select [2, !Split ['/', !Ref AWS::StackId]]]],'countrycode']]
+      Type: String
+      Value: !Ref CountryCode
+  parameterISOCountryCode:
+    Type: AWS::SSM::Parameter
+    Properties: 
+      Name: !Join ['/', ['/connect/dialer', !Select [4, !Split ['-', !Select [2, !Split ['/', !Ref AWS::StackId]]]],'isocountrycode']]
+      Type: String
+      Value: !Ref ISOCountryCode
 
 
   SetDispositionCode:
