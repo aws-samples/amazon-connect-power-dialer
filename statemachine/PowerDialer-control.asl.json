@@ -72,11 +72,9 @@
       "ResultPath": "$.params",
       "ResultSelector": {
         "totalRecords.$": "$.Payload.totalRecords",
-        "table-activedialing.$": "$.Payload.table-activedialing",
         "contactflow.$": "$.Payload.contactflow",
         "connectid.$": "$.Payload.connectid",
-        "queue.$": "$.Payload.queue",
-        "table-dialerlist.$": "$.Payload.table-dialerlist"
+        "queue.$": "$.Payload.queue"
       }
     },
     "GetAvailableAgents": {
