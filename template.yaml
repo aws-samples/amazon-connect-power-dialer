@@ -19,6 +19,13 @@ Parameters:
   ConnectQueueId:
     Type: String
     Description: Amazon Connect Queue ID to use for the outbound call
+  CountryCode:
+    Type: String
+    Description: Country code of destination country
+  ISOCountryCode:
+    Type: String
+    Description: 2 letter code for country code
+    
 
 Resources:
   dialinglistbucket:
@@ -388,6 +395,17 @@ Resources:
                   - 'firehose:*'
                   - 'kinesis:*'
                   - 'sqs:*'
+                Resource:
+                  - '*'
+        -
+          PolicyName: PinpointAccess
+          PolicyDocument:
+            Version: 2012-10-17
+            Statement:
+              -
+                Effect: Allow
+                Action:
+                  - 'mobiletargeting:GetVoiceTemplate'
                 Resource:
                   - '*'
   CampaignLauncherRole:
