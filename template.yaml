@@ -661,7 +661,7 @@ Resources:
     Properties: 
       Name: !Join ['/', ['/connect/dialer', !Select [4, !Split ['-', !Select [2, !Split ['/', !Ref AWS::StackId]]]],'contactflow']]
       Type: String
-      Value: 'Replace with Connect outbound contact flow.'
+      Value: !Ref ConnectContactFlowId
 
   parameterOutputBucket:
     Type: AWS::SSM::Parameter
@@ -675,13 +675,13 @@ Resources:
     Properties: 
       Name: !Join ['/', ['/connect/dialer', !Select [4, !Split ['-', !Select [2, !Split ['/', !Ref AWS::StackId]]]],'connectid']]
       Type: String
-      Value: 'Replace with Connect Instance ID'
+      Value: !Ref ConnectInstanceId
   parameterQueue:
     Type: AWS::SSM::Parameter
     Properties: 
       Name: !Join ['/', ['/connect/dialer', !Select [4, !Split ['-', !Select [2, !Split ['/', !Ref AWS::StackId]]]],'queue']]
       Type: String
-      Value: 'Replace with Queue ID'
+      Value: !Ref ConnectQueueId
   parameterCountryCode:
     Type: AWS::SSM::Parameter
     Properties: 
