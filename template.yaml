@@ -375,6 +375,21 @@ Resources:
                   - 'sqs:*'
                 Resource:
                   - '*'
+        -
+          PolicyName: PinpointAccess
+          PolicyDocument:
+            Version: 2012-10-17
+            Statement:
+              -
+                Effect: Allow
+                Action:
+                  - 'mobiletargeting:GetVoiceTemplate'
+                  - 'mobiletargeting:GetCampaign'
+                  - 'mobiletargeting:GetSegment'
+                  - 'mobiletargeting:PhoneNumberValidate'
+                Resource:
+                  - '*'
+
   CampaignLauncherRole:
     Type: AWS::IAM::Role
     Properties:
