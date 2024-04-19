@@ -59,7 +59,7 @@
           "ErrorEquals": [
             "States.ALL"
           ],
-          "Next": "dialerError"
+          "Next": "deactivateDialerDueError"
         }
       ],
       "Parameters": {
@@ -87,7 +87,7 @@
           "ErrorEquals": [
             "States.ALL"
           ],
-          "Next": "dialerError"
+          "Next": "deactivateDialerDueError"
         }
       ],
       "Parameters": {
@@ -128,7 +128,7 @@
           "ErrorEquals": [
             "States.ALL"
           ],
-          "Next": "dialerError"
+          "Next": "deactivateDialerDueError"
         }
       ],
       "Parameters": {
@@ -164,7 +164,7 @@
           "ErrorEquals": [
             "States.ALL"
           ],
-          "Next": "dialerError"
+          "Next": "deactivateDialerDueError"
         }
       ],
       "ResultPath": "$.mapOutput",
@@ -205,6 +205,17 @@
         "Value": "False"
       },
       "Next": "dialerFinished"
+    },
+    "deactivateDialerDueError": {
+      "Comment": "Deactivate dialer due a problem",
+      "Type": "Task",
+      "Resource": "arn:aws:states:::aws-sdk:ssm:putParameter",
+      "Parameters": {
+        "Name": "${ParameterDialerStatus}",
+        "Overwrite":true,
+        "Value": "False"
+      },
+      "Next": "dialerError"
     },
     "dialerFinished": {
       "Type": "Succeed"
