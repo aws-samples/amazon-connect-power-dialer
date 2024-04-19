@@ -118,6 +118,7 @@ def place_call(phoneNumber, contactFlow,connectID,queue,attributes):
                 DestinationPhoneNumber=phoneNumber,
                 ContactFlowId=contactFlow,
                 InstanceId=connectID,
+                ClientToken=attributes['campaignId']+'-'+attributes['endpointId'],
                 QueueId=queue
                 )
     except Exception as e:
