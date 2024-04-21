@@ -47,7 +47,7 @@ def get_contact(quantity,sqs_url):
                 'All'
             ],
             VisibilityTimeout=10,
-            WaitTimeSeconds=3
+            WaitTimeSeconds=5
             )
     except:
         return None
