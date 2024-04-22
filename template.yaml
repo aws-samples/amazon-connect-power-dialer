@@ -334,6 +334,7 @@ Resources:
                   - 'mobiletargeting:GetCampaign'
                   - 'mobiletargeting:GetSegment'
                   - 'mobiletargeting:PhoneNumberValidate'
+                  - 'mobiletargeting:PutEvents'
                 Resource:
                   - '*'
 
