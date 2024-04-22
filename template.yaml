@@ -62,6 +62,9 @@ Resources:
         PointInTimeRecoveryEnabled: True
       SSESpecification:
         SSEEnabled: True
+      TimeToLiveSpecification:
+          AttributeName: "TimeToLive"
+          Enabled: True
   
   ControlSFRole:
     Type: AWS::IAM::Role

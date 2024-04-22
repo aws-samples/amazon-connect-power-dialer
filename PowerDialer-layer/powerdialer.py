@@ -1,6 +1,7 @@
 ##dialer
 import json
 import boto3
+import time
 import os
 from datetime import datetime
 from boto3.dynamodb.conditions import Key
@@ -132,21 +133,25 @@ def updateActiveDialing(contactId, token, phone, table):
     dynamodb = boto3.resource('dynamodb')
     table = dynamodb.Table(table)
     timestamp = str(datetime.now())
+    timetolive = 24*60*60 + int(time.time())
+
     try:
         response = table.update_item(
             Key={
                 'contactId': contactId
             }, 
-            UpdateExpression='SET #v1 = :val1, #v2 =:val2,#v3=:val3',  
+            UpdateExpression='SET #v1 = :val1, #v2 =:val2,#v3=:val3,#v4=:val4',  
             ExpressionAttributeNames={
                 '#v1': 'token',
                 '#v2': 'phone',
                 '#v3': 'timestamp',
+                '#v4': 'TimeToLive',
             },  
             ExpressionAttributeValues={
                 ':val1': token,
                 ':val2': phone,
-                ':val3': timestamp
+                ':val3': timestamp,
+                ':val4': timestamp
                 
             },
             ReturnValues="UPDATED_NEW"
