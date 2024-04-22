@@ -1,4 +1,6 @@
 # Amazon Connect Power Dialer
+04/21/24: Simplified dialing mechanism based on a single Step Function. Added attribute handling from Pinpoint list. Added ClientToken on start_outbound_voice_call to remove potential duplicate calls per campaign.
+
 This project contains source code and supporting files for a serverless dialer to be used on top of an Amazon Connect instance.
 
 The basic operation of the solution is based on the principle of a Power Dialer: New calls are placed once agents complete previous calls. Since calls are placed automatically, the inefficiencies and error-prone nature of manual dialing are mitigated; yet, since calls are initiated until agents become available, you can maintain the warm nature of person to person contacts (no wait time for end users when being contacted).
@@ -6,15 +8,16 @@ The general workflow for this solution is as follows:
 
 ![Workflow](/images/DialerOnConnect-Workflow.jpg "Workflow")
 
-1.	The administrator user loads a dialing list file using and initiates the dialing campaign.
-2.	The dialer loads the configuration from Dialer Configuration table.
-3.	The dialer pulls agent availability.
-4.	The dialer pulls contacts from the Dialing list table based on agent concurrency for the first dialing batch. Each contact attempt is marked on the dialing list.
-5.	Calls are launched in parallel based on the number of available agents.
-6.	Successful call connections are put in queue so agents can answer immediately. 
+1.	This is based on Amazon Pinpoint, segments must be based on files including: ChannelType,Address,User.UserId. Additional attributes should be mapped under User.UserAttributes.XXX.
+2.	A message template must be configured as part of Amazon Pinpoint. Attributes from the associated segment can be configured.
+3.	A campaign is launched based on the custom channel, pointint to the queueContacts Lambda function.
+4.	Contacts are queue on the SQS queue. The parameter concurrentCalls determines the number of simultaneous threads to initiate calling (this number should map expected agents). The dialer pulls contacts from the queue based on call concurrency.
+5.	Calls are launched in parallel based on the number of concurrentCalls.
+6.	Successful call connections are put in the configured queue.  
 7.	Agent and contact activity are monitored so calls are initiated once Agents wrap up the active calls.
+8.  System parameters are included under the /connect/dialer/<DEPLOYMENT>/ path.
 
-This previous workflow maps to the simplified architecture shown below (AWS Lambda Functions and AWS Step Functions machines were not specified explicitly in sake of brevity). The solution leverages Amazon Connect API start outbound voice API to place calls, triggered by AWS Lambda Functions and orchestrated with Step Functions. Lambda Functions are also used to pull configuration, read contacts from the dialing list table and monitor Amazon Connect events on a Amazon Kinesis Stream (from both Contact Trace Records and Agent Events). Finally, Amazon DynamoDB and Amazon Simple Storage Service are used for dialing list, configuration parameters storage and input/output space for dialing lists and results. 
+The solution leverages Amazon Connect API start outbound voice API to place calls, triggered by AWS Lambda Functions and orchestrated with Step Functions. Lambda Functions are also used to pull configuration, read contacts from the dialing list table and monitor Amazon Connect events on a Amazon Kinesis Stream (from both Contact Trace Records and Agent Events). Finally, Amazon DynamoDB and Amazon Simple Storage Service are used for dialing list, configuration parameters storage and input/output space for dialing lists and results. 
 Roles for the Lambda Functions and Step Functions State Machines are defined in AWS Identity and Access Management to limit access to specific resources. 
 
 ![Architecture](/images/DialerOnConnect-Architecture.jpg "Architecture")
@@ -23,8 +26,7 @@ Roles for the Lambda Functions and Step Functions State Machines are defined in 
 
 The project includes a cloud formation template with a Serverless Application Model (SAM) transform to deploy resources as follows:
 
-### AWS Lambda functions
-- InputBucket: Used for list loading based on CSV files (Refer to the sample files for the structure). Fields custID and phone are mandatory. Additional fields are populated as attributes while placing calls.
+### Amazon S3
 - Resultsbucket: Storage for campaign results.
 
 ### AWS Lambda functions
@@ -33,7 +35,7 @@ The project includes a cloud formation template with a Serverless Application Mo
 - getAvailAgents: Gets agents available in the associated queue.
 - getConfig: Gets the configuration parameters from a DynamoDB table.
 - getContacts: Gets contact phone numbers to dial from a DynamoDB table.
-- ListLoad: Loads dialing list from a CSV file to DynamoDB.
+- queueContacts: Loads dialing list from the Amazon Pinpoint campaign.
 - ProcessContactEvents: Processes Contact Events to determine when would the next call should be placed.
 - SetDisposition: Process agent input based on a step by step guide contact flow to categorize calls.
 - SaveResults: Generates a CSV file based from the dialing attempts.
@@ -41,12 +43,10 @@ The project includes a cloud formation template with a Serverless Application Mo
 
 ### Step Functions
 
-- DialerControlSF: Provides the general structure for the dialer. Pulls initial configuration and invokes parallel DialerThreadSF executions to perform the dialing process.
-- DialerThreadSF: Provides a dialing thread execution that waits for agents to become available before placing calls.
+- DialerControlSF: Provides the general structure for the dialer. Pulls initial configuration and invokes parallel dialer executions to perform the dialing process.
 
 ### DynamoDB tables
 - ActiveDialing: ContactIds to dialed contact relationship for contacts being dialed.
-- dialList: Dialing list for the contacts.
 
 ### System Manager Paramater Store Parameters
 Configuration information is stored as parameters in System Manager Parameter Store. The following parameters require configuration to match Connect configuration.
@@ -71,6 +71,8 @@ Configuration information is stored as parameters in System Manager Parameter St
 1. Amazon Connect Instance already set up.
 2. AWS Console Access with administrator account.
 3. Cloud9 IDE or AWS and SAM tools installed and properly configured with administrator credentials.
+4. Configured project for Amazon Pinpoint.
+5. Message templates and built segments in Pinpoint.
 
 ## Deploy the solution
 1. Clone this repo.
@@ -90,7 +92,7 @@ if you get an error message about requirements you can try using containers.
 
 `sam deploy -g`
 
-SAM will ask for the name of the application (use "PowerDialer" or something similar) as all resources will be grouped under it; Region and a confirmation prompt before deploying resources, enter y.
+SAM will ask for the name of the application (use "PowerDialer" or something similar) as all resources will be grouped under it;Connect parameters, concurrent calls and targeted country (Phone number digits and the 2 letter ISO country code); Region and a confirmation prompt before deploying resources, enter y.
 SAM can save this information if you plan un doing changes, answer Y when prompted and accept the default environment and file name for the configuration.
 
 
@@ -116,9 +118,9 @@ As part of the configuration, you will need the deployed Amazon Connect Instance
 Make sure you replace the values for contactflow, phone numberm, queue and instance id. A call should be placed and put in queue.
 
 ## Configure Dialer Parameters
-
+This parameters are configured at solution deployment, modify only to change the initial configuration.
 1. Navigate to the System Manager - Parameter Store console.
-2. Modify the values for the following items . Note this items are case sensitive.
+2. Modify the values for the following items. Note this items are case sensitive.
 
 | parameter   | currentValue |
 |----------|:-------------:|
@@ -137,8 +139,8 @@ The step by step guide contact flow (file , available on the sample files allows
 1. Add a Set Contact Attributes block on the ContactFlow used for outbound calls, specify a user defined parameter for DefaultFlowForAgentUI and specify the contact flow id from the previous step.
 
 ## Campaign scheduling
-
-An EventBridge campaign is created as part of the deployment in the disabled state. From Eventbridge console browse to rules and select the <YOUR-STACK-NAME>CampaignLaunchSchedule rule.
+As an alternative orchestration mechanism, an Eventbridge rule is created. 
+An EventBridge rule is created as part of the deployment in the disabled state. From Eventbridge console browse to rules and select the <YOUR-STACK-NAME>CampaignLaunchSchedule rule.
 
 1. Click on Edit.
 2. Specify the required launch times for this campaign.
@@ -146,12 +148,10 @@ An EventBridge campaign is created as part of the deployment in the disabled sta
 4. Save changes and make sure to change the status of the rule to enabled.
 
 ## Operation
-The solution relies on Step Functions as the main orchestation point and Lambda Functions as the processing units. Starting a campaign will include 2 steps:
-1. Loading a dialing list.
-2. Launching a dialing job.
+The solution relies on Step Functions as the main orchestation point and Lambda Functions as the processing units. To start a campaign, launch a campaign on Amazon Pinpoint with a custom channel and the queueContacts lambda function as target. The solution will create queue contacts and launch the dialer control state machine.
 
 ### Loading a dialing list. 
-To load a list, simply upload the CSV file (example is provided on file [sample-file](/sample-files/sample-load.csv "sample-file") ) to the input bucket. An automated event will trigger the processing Lambda Function to upload the records. Be aware large files might consume a lot of time and might timeout on the Labda Function.
+Alternatively to Pinpoint, to load a list, simply upload a CSV file (example is provided on file [sample-file](/sample-files/sample-load.csv "sample-file") ) to the input bucket. An automated event will trigger the processing Lambda Function to upload the records. Be aware large files might consume a lot of time and might timeout on the Labda Function.
 
 
 #### Uploading the file 
@@ -170,7 +170,6 @@ The process to start the dialing job is through the Power Dialer Control Step Fu
 
 ### Stopping a  dialing job
 To stop the dialing job gracefully, got to Systems Manager Parameter Store and change the parameter /connect/dialer/XXXX/activeDialer to False.
-
 
 ### Initiating a new dialing job
 The dialing process marks each contact attempt on the dialing table as the way to keep track on the process, by the end of the dialing process all contacts on the table are marked as "attempted".Contacts need to be repopulated (by loading a new file or marking the specific contacts callAttempt parameter as False).
