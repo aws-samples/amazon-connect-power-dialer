@@ -8,6 +8,7 @@ ssm=boto3.client('ssm')
 def lambda_handler(event, context):
     DIALER_DEPLOYMENT = os.environ['DIALER_DEPLOYMENT']
     config=get_parameters(DIALER_DEPLOYMENT)
+    config['dialerThreads']= [0]*int(config['concurrentCalls'])
     return config
     
 def get_parameters(deployment):
@@ -28,7 +29,7 @@ def get_parameters(deployment):
 
             if not next_token:
                 break
-            
+
     except:
         print("Error getting config")
         return None

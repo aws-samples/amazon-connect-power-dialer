@@ -111,7 +111,8 @@ def place_call(phoneNumber, contactFlow,connectID,queue,attributes):
                 ContactFlowId=contactFlow,
                 InstanceId=connectID,
                 QueueId=queue,
-                Attributes=attributes
+                Attributes=attributes,
+                ClientToken=attributes['campaignId']+'-'+attributes['endpointId'],
                 )
         else:
             response = connect_client.start_outbound_voice_contact(

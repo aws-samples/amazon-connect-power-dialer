@@ -5,17 +5,17 @@ import boto3
 import datetime
 from botocore.exceptions import ClientError
 import re
-from blaster import queue_contact,update_config,get_config
+from powerdialer import queue_contact,update_config,get_config
 
 pinpointClient = boto3.client('pinpoint')
 sfn = boto3.client('stepfunctions')
 
 
 SQS_URL = os.environ['SQS_URL']
-BLASTER_DEPLOYMENT= os.environ['BLASTER_DEPLOYMENT']
+DIALER_DEPLOYMENT= os.environ['DIALER_DEPLOYMENT']
 SFN_ARN = os.environ['SFN_ARN']
-countrycode = get_config('countrycode', BLASTER_DEPLOYMENT)
-isocountrycode = get_config('isocountrycode', BLASTER_DEPLOYMENT)
+countrycode = get_config('countrycode', DIALER_DEPLOYMENT)
+isocountrycode = get_config('isocountrycode', DIALER_DEPLOYMENT)
 
 
 def lambda_handler(event, context):
@@ -77,13 +77,13 @@ def lambda_handler(event, context):
             pause_campaign(ApplicationId,CampaignId)
         
     if(count):
-        print("Contacts added to queue, validating blaster status.")
-        blasterStatus = get_config('activeBlaster', BLASTER_DEPLOYMENT)
-        print(blasterStatus)
-        if (blasterStatus == "False"):
-            print("Blaster inactive, starting.")
-            update_config('activeBlaster', "True", BLASTER_DEPLOYMENT)
-            print(launchBlaster(SFN_ARN,ApplicationId,CampaignId))
+        print("Contacts added to queue, validating dialer status.")
+        dialerStatus = get_config('activeDialer', DIALER_DEPLOYMENT)
+        print(dialerStatus)
+        if (dialerStatus == "False"):
+            print("Dialer inactive, starting.")
+            update_config('activeDialer', "True", DIALER_DEPLOYMENT)
+            print(launchDialer(SFN_ARN,ApplicationId,CampaignId))
     
     send_results(event['ApplicationId'],custom_events_batch)
 
@@ -127,7 +127,7 @@ def get_endpoint_data(endpoint):
     else:
         return None
 
-def launchBlaster(sfnArn,ApplicationId,CampaignId):
+def launchDialer(sfnArn,ApplicationId,CampaignId):
     
     inputData={
         'ApplicationId':ApplicationId,
@@ -252,4 +252,4 @@ def pause_campaign(application_id,campaign_id):
         print(e.response['Error'])
         return False
     else:
-        return response
+        return responsern response

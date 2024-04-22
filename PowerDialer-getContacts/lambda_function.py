@@ -2,7 +2,7 @@
 import json
 import boto3
 import os
-from powerdialer import get_config, get_callee, update_dial_list, update_config, delete_contact
+from powerdialer import delete_contact
 from boto3.dynamodb.conditions import Key
 from botocore.exceptions import ClientError
 
@@ -14,7 +14,6 @@ def lambda_handler(event, context):
     contacts = []
     endOfList = "False"
     if(availAgents>10):
-        ## Logic for implementing over 10 concurrent calls. [WIP]
         messages = []
         for i in range(round(availAgents/10)):
             msgblock = get_contact(availAgents,SQS_URL)
@@ -61,6 +60,10 @@ def get_contact(quantity,sqs_url):
                     'custID': message['MessageAttributes']['custID']['StringValue'],
                     'attributes': json.loads(message['MessageAttributes']['attributes']['StringValue'])
                     }
+                messages.append(msg)
+            return messages
+        else:
+            return None                   }
                 messages.append(msg)
             return messages
         else:

@@ -19,6 +19,9 @@ Parameters:
   ConnectQueueId:
     Type: String
     Description: Amazon Connect Queue ID to use for the outbound call
+  ConcurrentCalls:
+    Type: String
+    Description: Number of calls to be called simultaneously.
   CountryCode:
     Type: String
     Description: Country code of destination country
@@ -118,7 +121,7 @@ Resources:
                   - states:DescribeExecution
                   - states:StartExecution
                   - states:StopExecution
-                Resource: !GetAtt DialThreadSF.Arn
+                Resource: '*'
               -
                 Effect: Allow
                 Action:
@@ -126,65 +129,6 @@ Resources:
                   - events:PutRule
                   - events:DescribeRule
                 Resource: !Sub arn:aws:events:${AWS::Region}:${AWS::AccountId}:rule/StepFunctionsGetEventsForStepFunctionsExecutionRule
-              -
-                Effect: Allow
-                Action: lambda:InvokeFunction
-                Resource:
-                  - !GetAtt dial.Arn
-                  - !GetAtt getAvailAgents.Arn
-                  - !GetAtt getConfig.Arn
-                  - !GetAtt getContacts.Arn
-                  - !GetAtt ListLoad.Arn
-                  - !GetAtt SaveResults.Arn
-        -
-          PolicyName: ParameterAccess
-          PolicyDocument:
-            Version: 2012-10-17
-            Statement:
-              -
-                Effect: Allow
-                Action:
-                  - 'ssm:GetParametersByPath'
-                  - 'ssm:GetParameter'
-                  - 'ssm:PutParameter'
-                Resource:
-                  - '*'
-  
-  ThreadSFRole:
-    Type: AWS::IAM::Role
-    Properties:
-      AssumeRolePolicyDocument:
-        Version: 2012-10-17
-        Statement:
-          -
-            Effect: Allow
-            Principal:
-              Service:
-                - states.amazonaws.com
-            Action: sts:AssumeRole
-
-      Policies:
-        -
-          PolicyName: ConfigTableAccess
-          PolicyDocument:
-            Version: 2012-10-17
-            Statement:
-              -
-                Effect: Allow
-                Action:
-                  - 'dynamodb:PutItem'
-                  - 'dynamodb:DeleteItem'
-                  - 'dynamodb:GetItem'
-                  - 'dynamodb:Scan'
-                  - 'dynamodb:Query'
-                  - 'dynamodb:UpdateItem'
-                Resource:
-                  - !GetAtt ActiveDialing.Arn
-        -
-          PolicyName: InvokeLambdaFunctions
-          PolicyDocument:
-            Version: 2012-10-17
-            Statement:
               -
                 Effect: Allow
                 Action: lambda:InvokeFunction
@@ -452,24 +396,6 @@ Resources:
                 - s3:PutObject
                 Resource: "*"
 
-  DialThreadSF:
-    Type: AWS::Serverless::StateMachine
-    Properties:
-      Name: !Join ['-', ['DialerThreadSF', !Select [4, !Split ['-', !Select [2, !Split ['/', !Ref AWS::StackId]]]]]]
-      DefinitionUri: statemachine/PowerDialer-dialthread.asl.json
-      Role: !GetAtt ThreadSFRole.Arn
-      DefinitionSubstitutions:
-        PowerDialerdialArn: !GetAtt dial.Arn
-        PowerDialergetAvailAgentsArn: !GetAtt getAvailAgents.Arn
-        PowerDialergetConfigArn: !GetAtt getConfig.Arn
-        PowerDialergetContactsArn: !GetAtt getContacts.Arn
-        PowerDialerListLoadArn: !GetAtt ListLoad.Arn
-        PowerDialerSaveResultsArn: !GetAtt SaveResults.Arn
-        ParameterIndex: !Join ['/', ['/connect/dialer', !Select [4, !Split ['-', !Select [2, !Split ['/', !Ref AWS::StackId]]]],'dialIndex']]
-        ParameterTotalRecords: !Join ['/', ['/connect/dialer', !Select [4, !Split ['-', !Select [2, !Split ['/', !Ref AWS::StackId]]]],'totalRecords']]
-        ParameterActiveDialing: !Join ['/', ['/connect/dialer', !Select [4, !Split ['-', !Select [2, !Split ['/', !Ref AWS::StackId]]]],'table-activedialing']]
-        ParameterDialerStatus: !Join ['/', ['/connect/dialer', !Select [4, !Split ['-', !Select [2, !Split ['/', !Ref AWS::StackId]]]],'activeDialer']]
-
   DialerControlSF:
     Type: AWS::Serverless::StateMachine
     Properties:
@@ -483,7 +409,6 @@ Resources:
         PowerDialergetContactsArn: !GetAtt getContacts.Arn
         PowerDialerListLoadArn: !GetAtt ListLoad.Arn
         PowerDialerSaveResultsArn: !GetAtt SaveResults.Arn
-        PowerDialerdialthreadArn: !GetAtt DialThreadSF.Arn
         ParameterIndex: !Join ['/', ['/connect/dialer', !Select [4, !Split ['-', !Select [2, !Split ['/', !Ref AWS::StackId]]]],'dialIndex']]
         ParameterTotalRecords: !Join ['/', ['/connect/dialer', !Select [4, !Split ['-', !Select [2, !Split ['/', !Ref AWS::StackId]]]],'totalRecords']]
         ParameterActiveDialing: !Join ['/', ['/connect/dialer', !Select [4, !Split ['-', !Select [2, !Split ['/', !Ref AWS::StackId]]]],'table-activedialing']]
@@ -694,6 +619,12 @@ Resources:
       Name: !Join ['/', ['/connect/dialer', !Select [4, !Split ['-', !Select [2, !Split ['/', !Ref AWS::StackId]]]],'isocountrycode']]
       Type: String
       Value: !Ref ISOCountryCode
+  parameterconcurrentCalls:
+    Type: AWS::SSM::Parameter
+    Properties: 
+      Name: !Join ['/', ['/connect/dialer', !Select [4, !Split ['-', !Select [2, !Split ['/', !Ref AWS::StackId]]]],'concurrentCalls']]
+      Type: String
+      Value: !Ref ConcurrentCalls
 
 
   SetDispositionCode:
