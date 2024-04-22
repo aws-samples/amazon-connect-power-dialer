@@ -241,7 +241,7 @@ def send_results(application_id,events_batch):
             'BatchItem': events_batch
         }
     )
-    print(put_events_result)
+    return put_events_result
 def pause_campaign(application_id,campaign_id):
     try:
         response = pinpointClient.update_campaign(
@@ -252,4 +252,4 @@ def pause_campaign(application_id,campaign_id):
         print(e.response['Error'])
         return False
     else:
-        return responsern response
+        return response
