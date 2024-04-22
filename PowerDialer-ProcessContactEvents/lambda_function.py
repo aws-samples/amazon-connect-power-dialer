@@ -10,6 +10,7 @@ ACTIVE_DIALING = os.environ['ACTIVE_DIALING']
 
 
 def lambda_handler(event, context):
+    print(event)
     if(event['detail'].get('eventType') =='DISCONNECTED'):
         contactId = str(event['detail']['contactId'])
         token = get_token(contactId,ACTIVE_DIALING)
@@ -20,7 +21,7 @@ def lambda_handler(event, context):
             print("Token:" + token)
             try:
                 sendresult = sendSuccessToken(token,contactId)
-                remove_contactId(contactId,ACTIVE_DIALING)
+                #remove_contactId(contactId,ACTIVE_DIALING)
             except Exception as e:
                     print (e)
             else:
