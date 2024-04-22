@@ -63,44 +63,4 @@ def get_contact(quantity,sqs_url):
                 messages.append(msg)
             return messages
         else:
-            return None                   }
-                messages.append(msg)
-            return messages
-        else:
             return None
-
-
-'''
-##DDB Based Method
-    DIALER_LIST_TABLE = get_config('table-dialerlist', DIALER_DEPLOYMENT)
-    responseIndex = 0
-    totalRecords = int(event['params']['totalRecords'])
-    print("Total Records: " + str(totalRecords))
-    index = int(get_config('dialIndex',DIALER_DEPLOYMENT))
-    print("dialIndex: " + str(index))
-
-
-    #Find the next phone in contact that has not been called.
-    while(index<= totalRecords and responseIndex < availAgents):
-        print("responseIndex: " + str(responseIndex))
-        callee = get_callee(index, DIALER_LIST_TABLE)
-        if(callee!=None and callee['callAttempted']==False):
-            
-            update_dial_list(index, 'callAttempted',True, DIALER_LIST_TABLE)
-            print('Fetched: ')
-            print('CustID: ' + callee['custID']+':'+callee['phone'])
-            responseIndex+= 1
-            contacts.append(dict([('custID',callee['custID']),('index', index),('phone',callee['phone']),('attributes',callee['attributes'])]))
-            endOfList = "False"
-            #return contactResponse
-        else:
-            index += 1
-            print('No more contacts available for callee, increasing index:')
-            print("dialIndex: " + str(index))
-            if(index<=totalRecords):
-                update_config('dialIndex', index, DIALER_DEPLOYMENT)
-                
-            else:
-                print("No more callees")
-                endOfList = "True"
-'''
