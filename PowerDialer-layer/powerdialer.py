@@ -151,7 +151,7 @@ def updateActiveDialing(contactId, token, phone, table):
                 ':val1': token,
                 ':val2': phone,
                 ':val3': timestamp,
-                ':val4': timestamp
+                ':val4': timetolive
                 
             },
             ReturnValues="UPDATED_NEW"
