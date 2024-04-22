@@ -31,7 +31,7 @@ def lambda_handler(event, context):
         token = get_token(contactId,ACTIVE_DIALING_TABLE)
         if(token!= None):
             print("Existing previous call attempt")
-            send_task_success(token)
+            send_task_success(task_token)
         else:
             print("Completed new call")
             validNumber= True
