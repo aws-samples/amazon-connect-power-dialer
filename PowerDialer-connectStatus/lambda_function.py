@@ -46,7 +46,7 @@ def on_working_hours(instanceId, queueId):
         if entry['Day'] == today:
             start_time = datetime.time(entry['StartTime']['Hours'], entry['StartTime']['Minutes'])
             end_time = datetime.time(entry['EndTime']['Hours'], entry['EndTime']['Minutes'])
-            if start_time <= current_time < end_time:
+            if start_time <= current_time < end_time or start_time == end_time:
                 response = "True"
                 break
         else:
