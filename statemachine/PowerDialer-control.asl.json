@@ -72,8 +72,57 @@
         "config.$": "$.config"
       },
       "Iterator": {
-        "StartAt": "GetAvailAgents",
+        "StartAt": "GetDialerStatus",
         "States": {
+          "GetDialerStatus": {
+            "Type": "Task",
+            "Parameters": {
+              "Name": "${ParameterDialerStatus}"
+            },
+            "Resource": "arn:aws:states:::aws-sdk:ssm:getParameter",
+            "Next": "GetConnectStatus",
+            "ResultSelector": {
+              "value.$": "$.Parameter.Value"
+            },
+            "ResultPath": "$.params.activeDialer"
+          },
+          "GetConnectStatus": {
+            "Type": "Task",
+            "Resource": "arn:aws:states:::lambda:invoke",
+            "Parameters": {
+              "Payload": {
+                "params.$": "$.params"
+              },
+              "FunctionName": "${PowerDialergetConnectStatusArn}"
+            },
+            "Retry": [
+              {
+                "ErrorEquals": [
+                  "Lambda.ServiceException",
+                  "Lambda.AWSLambdaException",
+                  "Lambda.SdkClientException",
+                  "Lambda.TooManyRequestsException"
+                ],
+                "IntervalSeconds": 1,
+                "MaxAttempts": 3,
+                "BackoffRate": 2
+              }
+            ],
+            "Next": "isDialerActive",
+            "ResultPath": "$.connect",
+            "ResultSelector": {
+              "queueEnabled.$": "$.Payload.queueEnabled",
+              "workingHours.$": "$.Payload.workingHours"
+            },
+            "Catch": [
+              {
+                "ErrorEquals": [
+                  "States.ALL"
+                ],
+                "Next": "ThreadFailed"
+              }
+            ]
+          },
           "GetAvailAgents": {
             "Type": "Task",
             "Resource": "arn:aws:states:::lambda:invoke",
@@ -181,6 +230,7 @@
               }
             },
             "Next": "GetDialerStatus",
+            "TimeoutSeconds": 1800,
             "ResultPath": null,
             "Catch": [
               {
@@ -191,24 +241,24 @@
               }
             ]
           },
-          "GetDialerStatus": {
-            "Type": "Task",
-            "Parameters": {
-              "Name": "${ParameterDialerStatus}"
-            },
-            "Resource": "arn:aws:states:::aws-sdk:ssm:getParameter",
-            "Next": "isDialerActive",
-            "ResultSelector": {
-              "value.$": "$.Parameter.Value"
-            },
-            "ResultPath": "$.params.activeDialer"
-          },
           "isDialerActive": {
             "Type": "Choice",
             "Choices": [
               {
-                "Variable": "$.params.activeDialer.value",
-                "StringEquals": "True",
+                "And": [
+                  {
+                    "Variable": "$.params.activeDialer.value",
+                    "StringEquals": "True"
+                  },
+                  {
+                    "Variable": "$.connect.queueEnabled",
+                    "StringEquals": "True"
+                  },
+                  {
+                    "Variable": "$.connect.workingHours",
+                    "StringEquals": "True"
+                  }
+                ],
                 "Next": "GetAvailAgents"
               }
             ],

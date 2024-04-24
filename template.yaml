@@ -78,8 +78,6 @@ Resources:
               Service:
                 - states.amazonaws.com
             Action: sts:AssumeRole
-      ManagedPolicyArns: 
-        - arn:aws:iam::aws:policy/AmazonDynamoDBFullAccess
       Policies:
         -
           PolicyName: LogAccess
@@ -142,6 +140,7 @@ Resources:
                   - !GetAtt getContacts.Arn
                   - !GetAtt ListLoad.Arn
                   - !GetAtt SaveResults.Arn
+                  - !GetAtt getConnectStatus.Arn
         -
           PolicyName: ParameterAccess
           PolicyDocument:
@@ -245,7 +244,7 @@ Resources:
                 Resource:
                   - '*'
         -
-          PolicyName: InitiateVoiceContact
+          PolicyName: ConnectPermissions
           PolicyDocument:
             Version: 2012-10-17
             Statement:
@@ -253,21 +252,11 @@ Resources:
                 Effect: Allow
                 Action:
                   - 'connect:StartOutboundVoiceContact'
-                Resource:
-                  - '*'
-        -
-          PolicyName: getCurrentMetricData
-          PolicyDocument:
-            Version: 2012-10-17
-            Statement:
-              -
-                Effect: Allow
-                Action:
+                  - 'connect:DescribeHoursOfOperation'
                   - 'connect:GetCurrentMetricData'
+                  - 'connect:DescribeQueue'
                 Resource:
                   - '*'
-
-
         -
           PolicyName: ParameterAccess
           PolicyDocument:
@@ -413,6 +402,7 @@ Resources:
         PowerDialergetContactsArn: !GetAtt getContacts.Arn
         PowerDialerListLoadArn: !GetAtt ListLoad.Arn
         PowerDialerSaveResultsArn: !GetAtt SaveResults.Arn
+        PowerDialergetConnectStatusArn: !GetAtt getConnectStatus.Arn
         ParameterIndex: !Join ['/', ['/connect/dialer', !Select [4, !Split ['-', !Select [2, !Split ['/', !Ref AWS::StackId]]]],'dialIndex']]
         ParameterTotalRecords: !Join ['/', ['/connect/dialer', !Select [4, !Split ['-', !Select [2, !Split ['/', !Ref AWS::StackId]]]],'totalRecords']]
         ParameterActiveDialing: !Join ['/', ['/connect/dialer', !Select [4, !Split ['-', !Select [2, !Split ['/', !Ref AWS::StackId]]]],'table-activedialing']]
@@ -474,7 +464,16 @@ Resources:
       Role: !GetAtt PowerDialerLambdaRole.Arn
       CodeUri: PowerDialer-getAvailAgents/
       Handler: lambda_function.lambda_handler
-  
+
+  getConnectStatus:
+    Type: AWS::Serverless::Function 
+    Properties:
+      Role: !GetAtt PowerDialerLambdaRole.Arn
+      CodeUri: PowerDialer-connectStatus/
+      Handler: lambda_function.lambda_handler
+      Layers:
+        - !Ref PowerDialer
+
   getConfig:
     Type: AWS::Serverless::Function 
     Properties:
