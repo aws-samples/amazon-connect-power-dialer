@@ -235,9 +235,18 @@
             "Catch": [
               {
                 "ErrorEquals": [
+                  "States.Timeout"
+                ],
+                "Comment": "TimeOut",
+                "Next": "GetDialerStatus",
+                "ResultPath": null
+              },
+              {
+                "ErrorEquals": [
                   "States.ALL"
                 ],
-                "Next": "ThreadFailed"
+                "Next": "ThreadFailed",
+                "ResultPath": null
               }
             ]
           },
