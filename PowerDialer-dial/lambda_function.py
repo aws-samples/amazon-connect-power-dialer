@@ -20,7 +20,7 @@ def lambda_handler(event, context):
     task_token = event['TaskToken']
     phone = event['contacts']['phone']
     attributes = event['contacts']['attributes']
-    #attributes['index'] = str(event['contacts']['index'])
+    attributes['UserId'] = event['contacts']['custID']
     
     response = place_call(phone, contactFlow, connectID, queue,attributes)
     

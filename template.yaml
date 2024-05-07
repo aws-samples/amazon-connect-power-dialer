@@ -22,6 +22,10 @@ Parameters:
   ConcurrentCalls:
     Type: String
     Description: Number of calls to be called simultaneously.
+  CallTimeOut:
+    Type: Number
+    Default: 3600
+    Description: Timeout in seconds for each call
   CountryCode:
     Type: String
     Description: Country code of destination country
@@ -139,7 +143,6 @@ Resources:
                   - !GetAtt getConfig.Arn
                   - !GetAtt getContacts.Arn
                   - !GetAtt ListLoad.Arn
-                  - !GetAtt SaveResults.Arn
                   - !GetAtt getConnectStatus.Arn
         -
           PolicyName: ParameterAccess
@@ -401,12 +404,12 @@ Resources:
         PowerDialergetConfigArn: !GetAtt getConfig.Arn
         PowerDialergetContactsArn: !GetAtt getContacts.Arn
         PowerDialerListLoadArn: !GetAtt ListLoad.Arn
-        PowerDialerSaveResultsArn: !GetAtt SaveResults.Arn
         PowerDialergetConnectStatusArn: !GetAtt getConnectStatus.Arn
         ParameterIndex: !Join ['/', ['/connect/dialer', !Select [4, !Split ['-', !Select [2, !Split ['/', !Ref AWS::StackId]]]],'dialIndex']]
         ParameterTotalRecords: !Join ['/', ['/connect/dialer', !Select [4, !Split ['-', !Select [2, !Split ['/', !Ref AWS::StackId]]]],'totalRecords']]
         ParameterActiveDialing: !Join ['/', ['/connect/dialer', !Select [4, !Split ['-', !Select [2, !Split ['/', !Ref AWS::StackId]]]],'table-activedialing']]
         ParameterDialerStatus: !Join ['/', ['/connect/dialer', !Select [4, !Split ['-', !Select [2, !Split ['/', !Ref AWS::StackId]]]],'activeDialer']]
+        ParameterConcurrencyChange: !Join ['/', ['/connect/dialer', !Select [4, !Split ['-', !Select [2, !Split ['/', !Ref AWS::StackId]]]],'concurrencyChange']]
         
   ResultsFirehose:
     Type: 'AWS::KinesisFirehose::DeliveryStream'
@@ -628,6 +631,18 @@ Resources:
       Name: !Join ['/', ['/connect/dialer', !Select [4, !Split ['-', !Select [2, !Split ['/', !Ref AWS::StackId]]]],'concurrentCalls']]
       Type: String
       Value: !Ref ConcurrentCalls
+  parametertimeOut:
+    Type: AWS::SSM::Parameter
+    Properties:
+      Name: !Join ['/', ['/connect/dialer', !Select [4, !Split ['-', !Select [2, !Split ['/', !Ref AWS::StackId]]]],'timeOut']]
+      Type: String
+      Value: !Ref CallTimeOut
+  parameterconcurrencyChange:
+    Type: AWS::SSM::Parameter
+    Properties: 
+      Name: !Join ['/', ['/connect/dialer', !Select [4, !Split ['-', !Select [2, !Split ['/', !Ref AWS::StackId]]]],'concurrencyChange']]
+      Type: String
+      Value: False
 
 
   SetDispositionCode:
@@ -642,24 +657,6 @@ Resources:
         Variables:
           DIALER_DEPLOYMENT: !Select [4, !Split ['-', !Select [2, !Split ['/', !Ref AWS::StackId]]]]
           RESULTS_FIREHOSE_NAME: !Ref ResultsFirehose
-
-
-
-  SaveResults:
-    Type: AWS::Serverless::Function 
-    Properties:
-      Role: !GetAtt PowerDialerLambdaRole.Arn
-      CodeUri: PowerDialer-SaveResults/
-      Handler: lambda_function.lambda_handler
-      MemorySize: 512
-      Timeout: 600
-      Layers:
-        - !Ref PowerDialer
-      Environment: 
-        Variables:
-          DIALER_DEPLOYMENT: !Select [4, !Split ['-', !Select [2, !Split ['/', !Ref AWS::StackId]]]]
-          ACTIVE_DIALING: !Ref ActiveDialing
-          RESULTS_BUCKET: !Ref resultsbucket
 
   ProcessContactEvents:
     Type: AWS::Serverless::Function 

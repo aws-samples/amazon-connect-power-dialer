@@ -12,8 +12,8 @@ def lambda_handler(event, context):
 
     connect_id=event['params']['connectid'] 
     queueid=event['params']['queue']
-    
-    return {"workingHours":on_working_hours(connect_id, queueid), "queueEnabled":is_queue_enabled(connect_id, queueid)}
+
+    return {"workingHours":on_working_hours(connect_id, queueid), "queueEnabled":is_queue_enabled(connect_id, queueid), "availableAgents":get_available_agents(connect_id,queueid)}
 
 
 def is_queue_enabled(instanceId, queueId):
@@ -46,9 +46,37 @@ def on_working_hours(instanceId, queueId):
         if entry['Day'] == today:
             start_time = datetime.time(entry['StartTime']['Hours'], entry['StartTime']['Minutes'])
             end_time = datetime.time(entry['EndTime']['Hours'], entry['EndTime']['Minutes'])
-            if start_time <= current_time < end_time or start_time == end_time:
+            if start_time <= current_time < end_time:
                 response = "True"
                 break
         else:
             response = "False"
     return response
+
+def get_available_agents(connectid,queue):
+    
+    connect_client = boto3.client('connect')
+    response = connect_client.get_current_metric_data(
+    InstanceId=connectid,
+    Filters={
+        'Queues': [
+            queue,
+        ],
+        'Channels': [
+            'VOICE',
+        ]
+    },
+    CurrentMetrics=[
+        {
+            'Name': 'AGENTS_ONLINE',
+            'Unit': 'COUNT'
+        },
+    ],
+)
+    #print("Available Agents Metrics :" + str(response['MetricResults']))
+    
+    if(response['MetricResults']):
+        availAgents = int(response['MetricResults'][0]['Collections'][0]['Value'])
+    else: 
+        availAgents =0
+    return availAgents
