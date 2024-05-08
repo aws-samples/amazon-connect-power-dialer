@@ -1,16 +1,7 @@
 {
   "Comment": "Dialer controller",
-  "StartAt": "SetConfigTable",
+  "StartAt": "ActivateDialer",
   "States": {
-      "SetConfigTable": {
-      "Type": "Pass",
-      "Result": {
-        "activeDialer": "${ParameterDialerStatus}",
-        "dialindex": "${ParameterIndex}"
-      },
-      "ResultPath": "$.config",
-      "Next": "ActivateDialer"
-    },
     "ActivateDialer": {
       "Comment": "Activate dialer",
       "Type": "Task",
@@ -75,8 +66,7 @@
               "ItemsPath": "$.params.dialerThreads",
               "InputPath": "$",
               "Parameters": {
-                "params.$": "$.params",
-                "config.$": "$.config"
+                "params.$": "$.params"
               },
               "Iterator": {
                 "StartAt": "GetDialerStatus",
@@ -98,7 +88,6 @@
                     "Resource": "arn:aws:states:::lambda:invoke",
                     "Parameters": {
                       "Payload": {
-                        "config.$": "$.config",
                         "params.$": "$.params",
                         "availAgents": 1
                       },
@@ -139,7 +128,6 @@
                     "Parameters": {
                       "FunctionName": "${PowerDialerdialArn}",
                       "Payload": {
-                        "config.$": "$.config",
                         "params.$": "$.params",
                         "contacts.$": "$.contacts.entries[0]",
                         "TaskToken.$": "$$.Task.Token"
@@ -354,10 +342,21 @@
         {
           "Variable": "$.params.concurrencyChange.value",
           "StringEquals": "True",
-          "Next": "GetConfig"
+          "Next": "clearConcurrencyChange"
         }
       ],
       "Default": "dialerFinished"
+    },
+    "clearConcurrencyChange": {
+      "Type": "Task",
+      "Parameters": {
+        "Name": "${ParameterConcurrencyChange}",
+        "Overwrite": true,
+        "Value": "False"
+      },
+      "Resource": "arn:aws:states:::aws-sdk:ssm:putParameter",
+      "Comment": "Set concurrencyChange parameter to true to adjust ",
+      "Next": "ActivateDialer"
     },
     "deactivateDialerDueError": {
       "Comment": "Deactivate dialer due a problem",
