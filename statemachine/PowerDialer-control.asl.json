@@ -288,17 +288,17 @@
                       "StringEquals": "True"
                     }
                   ],
-                  "Next": "concurrentAgentsChanges"
+                  "Next": "concurrentAgentsChanged"
                 }
               ],
               "Default": "ThreadDeactivateDialer"
             },
-            "concurrencyChange": {
+            "setConcurrencyChange": {
               "Type": "Task",
               "Parameters": {
                 "Name": "${ParameterConcurrencyChange}",
                 "Overwrite": true,
-                "Value": "False"
+                "Value": "True"
               },
               "Resource": "arn:aws:states:::aws-sdk:ssm:putParameter",
               "Comment": "Set concurrencyChange parameter to true to adjust ",
@@ -315,7 +315,7 @@
               "Comment": "Set activeDialer parameter to false to finish dialing process.",
               "End": true
             },
-            "concurrentAgentsChanges": {
+            "concurrentAgentsChanged": {
               "Type": "Choice",
               "Choices": [
                 {
@@ -324,7 +324,7 @@
                   "Next": "Wait"
                 }
               ],
-              "Default": "concurrencyChange"
+              "Default": "setConcurrencyChange"
             },
             "Wait": {
               "Type": "Wait",
