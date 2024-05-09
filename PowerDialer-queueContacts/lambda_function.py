@@ -79,8 +79,11 @@ def lambda_handler(event, context):
     if(count):
         print("Contacts added to queue, validating dialer status.")
         dialerStatus = get_config('activeDialer', DIALER_DEPLOYMENT)
-        print(dialerStatus)
-        if (dialerStatus == "False" and check_sf_executions(SFN_ARN)==0):
+        sfStatus = int(check_sf_executions(SFN_ARN))
+        print('dialerStatus',dialerStatus)
+        print('sfStatus',sfStatus)
+        
+        if (dialerStatus == "False" and sfStatus==0):
             print("Dialer inactive, starting.")
             print(launchDialer(SFN_ARN,ApplicationId,CampaignId))
         else:
