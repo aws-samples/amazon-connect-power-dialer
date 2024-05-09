@@ -2,6 +2,7 @@
 import json
 import boto3
 import time
+import random
 import os
 from datetime import datetime
 from boto3.dynamodb.conditions import Key
@@ -36,8 +37,6 @@ def save_results(data,partition,streamName):
         return False
     else:
         return response
-
-
 
 
 def queue_contact(custID,phone,attributes,sqs_url):
@@ -105,29 +104,47 @@ def upload_dial_record(dialIndex,custID,phone,attributes, table):
 
 def place_call(phoneNumber, contactFlow,connectID,queue,attributes):
     connect_client = boto3.client('connect')
-    try:
-        if(len(attributes)>0):
+    retry_count = 0
+    response = False
+    while retry_count < 4:
+        try:
+          if(len(attributes)>0):
             response = connect_client.start_outbound_voice_contact(
-                DestinationPhoneNumber=phoneNumber,
-                ContactFlowId=contactFlow,
-                InstanceId=connectID,
-                QueueId=queue,
-                Attributes=attributes,
-                ClientToken=attributes['campaignId']+'-'+attributes['endpointId'],
-                )
-        else:
-            response = connect_client.start_outbound_voice_contact(
-                DestinationPhoneNumber=phoneNumber,
-                ContactFlowId=contactFlow,
-                InstanceId=connectID,
-                ClientToken=attributes['campaignId']+'-'+attributes['endpointId'],
-                QueueId=queue
-                )
-    except Exception as e:
-        print(e)
-        print("phone" + str(phoneNumber))
-        response = None
+                  DestinationPhoneNumber=phoneNumber,
+                  ContactFlowId=contactFlow,
+                  InstanceId=connectID,
+                  QueueId=queue,
+                  Attributes=attributes,
+                  ClientToken=attributes['campaignId']+'-'+attributes['endpointId'],
+                  )
+          else:
+                response = connect_client.start_outbound_voice_contact(
+                  DestinationPhoneNumber=phoneNumber,
+                  ContactFlowId=contactFlow,
+                  InstanceId=connectID,
+                  ClientToken=attributes['campaignId']+'-'+attributes['endpointId'],
+                  QueueId=queue
+                  )
+        except ClientError as error:
+            print(error)
+            if error.response['Error']['Code'] == 'TooManyRequestsException':
+                print("TooManyRequestsException, waiting.")
+                retry_count += 1
+                delay = exponential_backoff(retry_count)
+                time.sleep(delay)
+                continue
+            else:
+                response = False
+        finally:
+            break
+
     return response
+
+def exponential_backoff(retry_count, base_delay=1, max_delay=32):
+    delay = min(base_delay * (2 ** retry_count), max_delay)
+    jitter = random.uniform(0, 0.1)
+    return delay + jitter
+
 
 def updateActiveDialing(contactId, token, phone, table):
     dynamodb = boto3.resource('dynamodb')

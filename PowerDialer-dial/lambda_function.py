@@ -3,7 +3,7 @@ import json
 import boto3
 import os
 from datetime import datetime
-from powerdialer import place_call, updateActiveDialing, save_results, get_token
+from powerdialer import place_call, updateActiveDialing, save_results, get_token, exponential_backoff
 from boto3.dynamodb.conditions import Key
 
 
@@ -36,13 +36,13 @@ def lambda_handler(event, context):
             print("Completed new call")
             validNumber= True
             updateActiveDialing(contactId, task_token, phone,ACTIVE_DIALING_TABLE)
-            results = {'phone':phone,'validNumber':True,'contactId':contactId}
+            results = {'CampaignStep':'Dialing','phone':phone,'CallConnected':True,'contactId':contactId}
     else:
         print("Invalid response - Clearing TASK")
         validNumber=False
         contactId = "NoContact"
         send_task_success(task_token)
-        results = {'phone':phone,'validNumber':False,'contactId':contactId}
+        results = {'CampaignStep':'Dialing','phone':phone,'CallConnected':False,'contactId':contactId}
 
     save_results(results,DIALER_DEPLOYMENT,RESULTS_FIREHOSE_NAME)
     return {'validNumber':validNumber, 'contactId': contactId }

@@ -12,39 +12,47 @@ Globals:
 Parameters:
   ConnectInstanceId:
     Type: String
+    AllowedPattern: "[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}"
     Description: Amazon Connect Instance ID to use for the outbound call
   ConnectContactFlowId:
     Type: String
+    AllowedPattern: "[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}"
     Description: Amazon Connect Contact Flow ID to use for the outbound call
   ConnectQueueId:
     Type: String
+    AllowedPattern: "[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}"
     Description: Amazon Connect Queue ID to use for the outbound call
-  ConcurrentCalls:
+  CountryCode:
+    Type: Number
+    Default: 52
+    Description: Country code of destination country
+  ISOCountryCode:
     Type: String
+    Default: MX
+    MaxLength: 2
+    Description: 2 letter code for country code
+  ConcurrentCalls:
+    Type: Number
+    Default: 1
     Description: Number of calls to be called simultaneously.
   CallTimeOut:
     Type: Number
     Default: 3600
     Description: Timeout in seconds for each call
-  CountryCode:
-    Type: String
-    Description: Country code of destination country
-  ISOCountryCode:
-    Type: String
-    Description: 2 letter code for country code
+
 
 Resources:
 
   dialinglistbucket:
     Type: AWS::S3::Bucket
     Properties:
-      BucketName: !Join ['-', ['dialer-input-bucket', !Select [4, !Split ['-', !Select [2, !Split ['/', !Ref AWS::StackId]]]]]]
+      BucketName: !Join ['-', [!Ref AWS::StackName,'input-bucket', !Select [4, !Split ['-', !Select [2, !Split ['/', !Ref AWS::StackId]]]]]]
     DeletionPolicy: Delete
   
   resultsbucket:
     Type: AWS::S3::Bucket
     Properties:
-      BucketName: !Join ['-', ['dialer-output-bucket', !Select [4, !Split ['-', !Select [2, !Split ['/', !Ref AWS::StackId]]]]]]
+      BucketName: !Join ['-', [!Ref AWS::StackName,'output-bucket', !Select [4, !Split ['-', !Select [2, !Split ['/', !Ref AWS::StackId]]]]]]
     DeletionPolicy: Delete
 
   ActiveDialing:
@@ -189,16 +197,16 @@ Resources:
                 Resource:
                   - !Sub 
                     - 'arn:aws:s3:::${dialingListBucket}'
-                    - dialingListBucket: !Join ['-', ['dialer-input-bucket', !Select [4, !Split ['-', !Select [2, !Split ['/', !Ref AWS::StackId]]]]]]
+                    - dialingListBucket: !Join ['-', [!Ref AWS::StackName,'input-bucket', !Select [4, !Split ['-', !Select [2, !Split ['/', !Ref AWS::StackId]]]]]]
                   - !Sub 
                     - 'arn:aws:s3:::${dialingListBucket}/*'
-                    - dialingListBucket: !Join ['-', ['dialer-input-bucket', !Select [4, !Split ['-', !Select [2, !Split ['/', !Ref AWS::StackId]]]]]]
+                    - dialingListBucket: !Join ['-', [!Ref AWS::StackName,'input-bucket', !Select [4, !Split ['-', !Select [2, !Split ['/', !Ref AWS::StackId]]]]]]
                   - !Sub 
                     - 'arn:aws:s3:::${resultsbucket}'
-                    - dialingListBucket: !Join ['-', ['dialer-output-bucket', !Select [4, !Split ['-', !Select [2, !Split ['/', !Ref AWS::StackId]]]]]]
+                    - dialingListBucket: !Join ['-', [!Ref AWS::StackName,'output-bucket', !Select [4, !Split ['-', !Select [2, !Split ['/', !Ref AWS::StackId]]]]]]
                   - !Sub 
                     - 'arn:aws:s3:::${resultsbucket}/*'
-                    - dialingListBucket: !Join ['-', ['dialer-output-bucket', !Select [4, !Split ['-', !Select [2, !Split ['/', !Ref AWS::StackId]]]]]]
+                    - dialingListBucket: !Join ['-', [!Ref AWS::StackName,'output-bucket', !Select [4, !Split ['-', !Select [2, !Split ['/', !Ref AWS::StackId]]]]]]
 
         -
           PolicyName: ControlStateMachine
@@ -211,10 +219,11 @@ Resources:
                   - states:DescribeExecution
                   - states:StartExecution
                   - states:StopExecution
+                  - states:ListExecutions
                 Resource:                   
                   - !Sub 
                     - 'arn:aws:states:${AWS::Region}:${AWS::AccountId}:stateMachine:${DialerControlName}'
-                    - DialerControlName: !Join ['-', ['DialerControlSF', !Select [4, !Split ['-', !Select [2, !Split ['/', !Ref AWS::StackId]]]]]]
+                    - DialerControlName: !Join ['-', [!Ref AWS::StackName,'ControlSF', !Select [4, !Split ['-', !Select [2, !Split ['/', !Ref AWS::StackId]]]]]]
 
         -
           PolicyName: ConfigTableAccess
@@ -395,7 +404,7 @@ Resources:
   DialerControlSF:
     Type: AWS::Serverless::StateMachine
     Properties:
-      Name: !Join ['-', ['DialerControlSF', !Select [4, !Split ['-', !Select [2, !Split ['/', !Ref AWS::StackId]]]]]]
+      Name: !Join ['-', [!Ref AWS::StackName,'ControlSF', !Select [4, !Split ['-', !Select [2, !Split ['/', !Ref AWS::StackId]]]]]]
       Role: !GetAtt ControlSFRole.Arn
       DefinitionUri: statemachine/PowerDialer-control.asl.json
       DefinitionSubstitutions:
@@ -405,17 +414,17 @@ Resources:
         PowerDialergetContactsArn: !GetAtt getContacts.Arn
         PowerDialerListLoadArn: !GetAtt ListLoad.Arn
         PowerDialergetConnectStatusArn: !GetAtt getConnectStatus.Arn
-        ParameterIndex: !Join ['/', ['/connect/dialer', !Select [4, !Split ['-', !Select [2, !Split ['/', !Ref AWS::StackId]]]],'dialIndex']]
-        ParameterTotalRecords: !Join ['/', ['/connect/dialer', !Select [4, !Split ['-', !Select [2, !Split ['/', !Ref AWS::StackId]]]],'totalRecords']]
-        ParameterActiveDialing: !Join ['/', ['/connect/dialer', !Select [4, !Split ['-', !Select [2, !Split ['/', !Ref AWS::StackId]]]],'table-activedialing']]
-        ParameterDialerStatus: !Join ['/', ['/connect/dialer', !Select [4, !Split ['-', !Select [2, !Split ['/', !Ref AWS::StackId]]]],'activeDialer']]
-        ParameterConcurrencyChange: !Join ['/', ['/connect/dialer', !Select [4, !Split ['-', !Select [2, !Split ['/', !Ref AWS::StackId]]]],'concurrencyChange']]
+        ParameterIndex: !Join ['/', ['/connect/dialer', !Ref AWS::StackName,'dialIndex']]
+        ParameterTotalRecords: !Join ['/', ['/connect/dialer', !Ref AWS::StackName,'totalRecords']]
+        ParameterActiveDialing: !Join ['/', ['/connect/dialer', !Ref AWS::StackName,'table-activedialing']]
+        ParameterDialerStatus: !Join ['/', ['/connect/dialer', !Ref AWS::StackName,'activeDialer']]
+        ParameterConcurrencyChange: !Join ['/', ['/connect/dialer', !Ref AWS::StackName,'concurrencyChange']]
         
   ResultsFirehose:
     Type: 'AWS::KinesisFirehose::DeliveryStream'
     Properties:
       DeliveryStreamType: DirectPut
-      DeliveryStreamName: !Join ['-', ['dialer-results', !Select [4, !Split ['-', !Select [2, !Split ['/', !Ref AWS::StackId]]]]]]
+      DeliveryStreamName: !Join ['-', [!Ref AWS::StackName,'dialer-results', !Select [4, !Split ['-', !Select [2, !Split ['/', !Ref AWS::StackId]]]]]]
       S3DestinationConfiguration:
         BucketARN: !GetAtt resultsbucket.Arn
         BufferingHints:
@@ -429,7 +438,7 @@ Resources:
   DialingListQueue:
     Type: AWS::SQS::Queue
     Properties:
-      QueueName: !Join ['-', ['dialer', !Select [4, !Split ['-', !Select [2, !Split ['/', !Ref AWS::StackId]]]]]]
+      QueueName: !Join ['-', [!Ref AWS::StackName, !Select [4, !Split ['-', !Select [2, !Split ['/', !Ref AWS::StackId]]]]]]
       VisibilityTimeout: 30
       DelaySeconds: 0
       MessageRetentionPeriod: 86400
@@ -457,7 +466,7 @@ Resources:
         - !Ref PowerDialer
       Environment: 
         Variables:
-          DIALER_DEPLOYMENT: !Select [4, !Split ['-', !Select [2, !Split ['/', !Ref AWS::StackId]]]]
+          DIALER_DEPLOYMENT: !Ref AWS::StackName
           ACTIVE_DIALING_TABLE: !Ref ActiveDialing
           RESULTS_FIREHOSE_NAME: !Ref ResultsFirehose
       
@@ -487,7 +496,7 @@ Resources:
         - !Ref PowerDialer
       Environment: 
         Variables:
-          DIALER_DEPLOYMENT: !Select [4, !Split ['-', !Select [2, !Split ['/', !Ref AWS::StackId]]]]
+          DIALER_DEPLOYMENT: !Ref AWS::StackName
 
   getContacts:
     Type: AWS::Serverless::Function 
@@ -499,7 +508,7 @@ Resources:
         - !Ref PowerDialer
       Environment: 
         Variables:
-          DIALER_DEPLOYMENT: !Select [4, !Split ['-', !Select [2, !Split ['/', !Ref AWS::StackId]]]]
+          DIALER_DEPLOYMENT: !Ref AWS::StackName
           SQS_URL: !Ref DialingListQueue
 
   queueContacts:
@@ -512,7 +521,7 @@ Resources:
         - !Ref PowerDialer
       Environment: 
         Variables:
-          DIALER_DEPLOYMENT: !Select [4, !Split ['-', !Select [2, !Split ['/', !Ref AWS::StackId]]]]
+          DIALER_DEPLOYMENT: !Ref AWS::StackName
           SQS_URL: !Ref DialingListQueue
           SFN_ARN: !Ref DialerControlSF
           
@@ -537,7 +546,7 @@ Resources:
         - !Ref PowerDialer
       Environment: 
         Variables:
-          DIALER_DEPLOYMENT: !Select [4, !Split ['-', !Select [2, !Split ['/', !Ref AWS::StackId]]]]
+          DIALER_DEPLOYMENT: !Ref AWS::StackName
           SQS_URL: !Ref DialingListQueue
       Events:
         LoadFileEvent:
@@ -554,7 +563,7 @@ Resources:
   contactSource:
     Type: AWS::SSM::Parameter
     Properties: 
-      Name: !Join ['/', ['/connect/dialer', !Select [4, !Split ['-', !Select [2, !Split ['/', !Ref AWS::StackId]]]],'contact-source']]
+      Name: !Join ['/', ['/connect/dialer', !Ref AWS::StackName,'contact-source']]
       Type: String
       Value: 's3'
   
@@ -562,85 +571,85 @@ Resources:
   parameterIndex:
     Type: AWS::SSM::Parameter
     Properties: 
-      Name: !Join ['/', ['/connect/dialer', !Select [4, !Split ['-', !Select [2, !Split ['/', !Ref AWS::StackId]]]],'dialIndex']]
+      Name: !Join ['/', ['/connect/dialer', !Ref AWS::StackName,'dialIndex']]
       Type: String
       Value: '0'
   
   parameterDialerStatus:
     Type: AWS::SSM::Parameter
     Properties: 
-      Name: !Join ['/', ['/connect/dialer', !Select [4, !Split ['-', !Select [2, !Split ['/', !Ref AWS::StackId]]]],'activeDialer']]
+      Name: !Join ['/', ['/connect/dialer', !Ref AWS::StackName,'activeDialer']]
       Type: String
       Value: 'False'  
 
   parameterTotalRecords:
     Type: AWS::SSM::Parameter
     Properties: 
-      Name: !Join ['/', ['/connect/dialer', !Select [4, !Split ['-', !Select [2, !Split ['/', !Ref AWS::StackId]]]],'totalRecords']]
+      Name: !Join ['/', ['/connect/dialer', !Ref AWS::StackName,'totalRecords']]
       Type: String
       Value: '0'
   
   parameterActiveDialing:
     Type: AWS::SSM::Parameter
     Properties: 
-      Name: !Join ['/', ['/connect/dialer', !Select [4, !Split ['-', !Select [2, !Split ['/', !Ref AWS::StackId]]]],'table-activedialing']]
+      Name: !Join ['/', ['/connect/dialer', !Ref AWS::StackName,'table-activedialing']]
       Type: String
       Value: !Ref ActiveDialing
 
   parameterContactFlow:
     Type: AWS::SSM::Parameter
     Properties: 
-      Name: !Join ['/', ['/connect/dialer', !Select [4, !Split ['-', !Select [2, !Split ['/', !Ref AWS::StackId]]]],'contactflow']]
+      Name: !Join ['/', ['/connect/dialer', !Ref AWS::StackName,'contactflow']]
       Type: String
       Value: !Ref ConnectContactFlowId
 
   parameterOutputBucket:
     Type: AWS::SSM::Parameter
     Properties: 
-      Name: !Join ['/', ['/connect/dialer', !Select [4, !Split ['-', !Select [2, !Split ['/', !Ref AWS::StackId]]]],'ResultsBucket']]
+      Name: !Join ['/', ['/connect/dialer', !Ref AWS::StackName,'ResultsBucket']]
       Type: String
       Value: !Ref resultsbucket
       
   parameterConnectId:
     Type: AWS::SSM::Parameter
     Properties: 
-      Name: !Join ['/', ['/connect/dialer', !Select [4, !Split ['-', !Select [2, !Split ['/', !Ref AWS::StackId]]]],'connectid']]
+      Name: !Join ['/', ['/connect/dialer', !Ref AWS::StackName,'connectid']]
       Type: String
       Value: !Ref ConnectInstanceId
   parameterQueue:
     Type: AWS::SSM::Parameter
     Properties: 
-      Name: !Join ['/', ['/connect/dialer', !Select [4, !Split ['-', !Select [2, !Split ['/', !Ref AWS::StackId]]]],'queue']]
+      Name: !Join ['/', ['/connect/dialer', !Ref AWS::StackName,'queue']]
       Type: String
       Value: !Ref ConnectQueueId
   parameterCountryCode:
     Type: AWS::SSM::Parameter
     Properties: 
-      Name: !Join ['/', ['/connect/dialer', !Select [4, !Split ['-', !Select [2, !Split ['/', !Ref AWS::StackId]]]],'countrycode']]
+      Name: !Join ['/', ['/connect/dialer', !Ref AWS::StackName,'countrycode']]
       Type: String
       Value: !Ref CountryCode
   parameterISOCountryCode:
     Type: AWS::SSM::Parameter
     Properties: 
-      Name: !Join ['/', ['/connect/dialer', !Select [4, !Split ['-', !Select [2, !Split ['/', !Ref AWS::StackId]]]],'isocountrycode']]
+      Name: !Join ['/', ['/connect/dialer', !Ref AWS::StackName,'isocountrycode']]
       Type: String
       Value: !Ref ISOCountryCode
   parameterconcurrentCalls:
     Type: AWS::SSM::Parameter
     Properties: 
-      Name: !Join ['/', ['/connect/dialer', !Select [4, !Split ['-', !Select [2, !Split ['/', !Ref AWS::StackId]]]],'concurrentCalls']]
+      Name: !Join ['/', ['/connect/dialer', !Ref AWS::StackName,'concurrentCalls']]
       Type: String
       Value: !Ref ConcurrentCalls
   parametertimeOut:
     Type: AWS::SSM::Parameter
     Properties:
-      Name: !Join ['/', ['/connect/dialer', !Select [4, !Split ['-', !Select [2, !Split ['/', !Ref AWS::StackId]]]],'timeOut']]
+      Name: !Join ['/', ['/connect/dialer', !Ref AWS::StackName,'timeOut']]
       Type: String
       Value: !Ref CallTimeOut
   parameterconcurrencyChange:
     Type: AWS::SSM::Parameter
     Properties: 
-      Name: !Join ['/', ['/connect/dialer', !Select [4, !Split ['-', !Select [2, !Split ['/', !Ref AWS::StackId]]]],'concurrencyChange']]
+      Name: !Join ['/', ['/connect/dialer', !Ref AWS::StackName,'concurrencyChange']]
       Type: String
       Value: False
 
@@ -655,7 +664,7 @@ Resources:
         - !Ref PowerDialer
       Environment: 
         Variables:
-          DIALER_DEPLOYMENT: !Select [4, !Split ['-', !Select [2, !Split ['/', !Ref AWS::StackId]]]]
+          DIALER_DEPLOYMENT: !Ref AWS::StackName
           RESULTS_FIREHOSE_NAME: !Ref ResultsFirehose
 
   ProcessContactEvents:
