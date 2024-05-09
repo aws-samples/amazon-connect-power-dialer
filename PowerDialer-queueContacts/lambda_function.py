@@ -64,28 +64,28 @@ def lambda_handler(event, context):
                     print("Failed to queue")
                     print(e)
                 else:
-                    custom_events_batch[key] = create_success_custom_event(key, CampaignId, body)
+                    #custom_events_batch[key] = create_success_custom_event(key, CampaignId, body)
                     count+=1
               else:
                 print("Invalid phone number:" + str(data['phone']))
-                custom_events_batch[key] = create_failure_custom_event(key, CampaignId, "Invalid phone")
+                #custom_events_batch[key] = create_failure_custom_event(key, CampaignId, "Invalid phone")
                 
                 errors+=1
         else:
             print("Template returned blank")
-            custom_events_batch[key] = create_failure_custom_event(key, CampaignId, "Template not found")
-            pause_campaign(ApplicationId,CampaignId)
+            #custom_events_batch[key] = create_failure_custom_event(key, CampaignId, "Template not found")
+            #pause_campaign(ApplicationId,CampaignId)
         
     if(count):
         print("Contacts added to queue, validating dialer status.")
         dialerStatus = get_config('activeDialer', DIALER_DEPLOYMENT)
         print(dialerStatus)
-        if (dialerStatus == "False"):
+        if (dialerStatus == "False" and check_sf_executions(SFN_ARN)==0):
             print("Dialer inactive, starting.")
-            update_config('activeDialer', "True", DIALER_DEPLOYMENT)
             print(launchDialer(SFN_ARN,ApplicationId,CampaignId))
-    
-    send_results(event['ApplicationId'],custom_events_batch)
+        else:
+            print("SF already started")    
+    #send_results(event['ApplicationId'],custom_events_batch)
 
     return {
         'statusCode': 200,
@@ -126,6 +126,14 @@ def get_endpoint_data(endpoint):
         return(userDetails)
     else:
         return None
+
+def check_sf_executions(sf_arn):
+    response = sfn.list_executions(
+    stateMachineArn=sf_arn,
+    statusFilter='RUNNING'
+    )
+    
+    return(len(response['executions']))
 
 def launchDialer(sfnArn,ApplicationId,CampaignId):
     
