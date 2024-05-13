@@ -79,13 +79,16 @@ def lambda_handler(event, context):
         sfStatus = int(check_sf_executions(SFN_ARN))
         print('dialerStatus',dialerStatus)
         print('sfStatus',sfStatus)
-        
+
         if (dialerStatus == "False" and sfStatus==0):
             print("Dialer inactive, starting.")
-            print(launchDialer(SFN_ARN,ApplicationId,CampaignId))
+            result=launchDialer(SFN_ARN,ApplicationId,CampaignId)
+            if(result):
+                print("SF started")
+            else:
+                print("SF already started")
         else:
-            print("SF already started")    
-    #send_results(event['ApplicationId'],custom_events_batch)
+            print("SF already started")     
 
     return {
         'statusCode': 200,
@@ -141,10 +144,16 @@ def launchDialer(sfnArn,ApplicationId,CampaignId):
         'ApplicationId':ApplicationId,
         'CampaignId' : CampaignId
         }
-    response = sfn.start_execution(
-    stateMachineArn=sfnArn,
-    input = json.dumps(inputData)
-    )
+    try:
+        response = sfn.start_execution(
+        stateMachineArn=sfnArn,
+        name=ApplicationId+CampaignId,
+        input = json.dumps(inputData)
+        )
+    except Exception as e:
+        print("SF not launched")
+        print(e)
+        return False
     return response
 
 def get_campaign_details(applicationid,campaignid):
