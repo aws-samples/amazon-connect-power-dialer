@@ -517,6 +517,8 @@ Resources:
       Role: !GetAtt PowerDialerLambdaRole.Arn
       CodeUri: PowerDialer-queueContacts/
       Handler: lambda_function.lambda_handler
+      MemorySize: 512
+      Timeout: 600
       Layers:
         - !Ref PowerDialer
       Environment: 
