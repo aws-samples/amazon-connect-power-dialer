@@ -56,7 +56,6 @@ def lambda_handler(event, context):
               #validated_number = validate_endpoint(data['phone'],countrycode,isocountrycode)
               
             #if(validated_number and 'PhoneType' in validated_number and validated_number['PhoneType']!='INVALID'):
-            attributes['phonetype']=validated_number['PhoneType']
             try:
                 count+=1
                 print("Queuing",'+'+countrycode+data['phone'],data['custID'],attributes)
@@ -66,7 +65,7 @@ def lambda_handler(event, context):
                 print(e)
                 errors+=1
             else:
-                print("Invalid phone number:" + str(data['phone']))
+                print("Added to queue:" + str(data['phone']))
                 #custom_events_batch[key] = create_failure_custom_event(key, CampaignId, "Invalid phone")
                 
         else:
