@@ -10,6 +10,7 @@ def lambda_handler(event, context):
     print(event)
     DIALER_DEPLOYMENT = os.environ['DIALER_DEPLOYMENT']
     SQS_URL = os.environ['SQS_URL']
+    PRIORITY_SQS_URL = os.environ['PRIORITY_SQS_URL']
     availAgents = int(event['availAgents'])
     contacts = []
     endOfList = "False"
@@ -19,6 +20,10 @@ def lambda_handler(event, context):
             msgblock = get_contact(availAgents,SQS_URL)
             messages.append(msgblock)
     else:
+        #if(check_for_contacts(PRIORITY_SQS_URL)):
+        #    messages = get_contact(availAgents,PRIORITY_SQS_URL)
+        #else:
+        #    messages = get_contact(availAgents,SQS_URL) 
         messages = get_contact(availAgents,SQS_URL)
 
     if messages is not None:
@@ -64,3 +69,13 @@ def get_contact(quantity,sqs_url):
             return messages
         else:
             return None
+
+def check_for_contacts(sqs_url):
+    sqs = boto3.client('sqs')
+    try:
+        response = client.get_queue_attributes(QueueUrl=sqs_url,AttributeNames=['ApproximateNumberOfMessages'])
+    except:
+        return None
+    else:
+        return response['Attributes']['ApproximateNumberOfMessages']
+
