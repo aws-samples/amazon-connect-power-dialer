@@ -5,7 +5,7 @@ import boto3
 import datetime
 from botocore.exceptions import ClientError
 import re
-from powerdialer import queue_contact,update_config,get_config
+from powerdialer import queue_contact,update_config,get_config, get_call_preferences
 
 pinpointClient = boto3.client('pinpoint')
 sfn = boto3.client('stepfunctions')
@@ -14,6 +14,7 @@ sfn = boto3.client('stepfunctions')
 SQS_URL = os.environ['SQS_URL']
 DIALER_DEPLOYMENT= os.environ['DIALER_DEPLOYMENT']
 SFN_ARN = os.environ['SFN_ARN']
+CUSTOMER_PROFILES_DOMAIN = os.environ['CUSTOMER_PROFILES_DOMAIN']
 countrycode = get_config('countrycode', DIALER_DEPLOYMENT)
 isocountrycode = get_config('isocountrycode', DIALER_DEPLOYMENT)
 
@@ -60,6 +61,13 @@ def lambda_handler(event, context):
                 count+=1
                 print("Queuing",'+'+countrycode+data['phone'],data['custID'],attributes)
                 queue_contact(data['custID'],'+'+countrycode+data['phone'],attributes,SQS_URL)
+
+                #callPreferences = get_call_preferences(countrycode+data['phone'],CUSTOMER_PROFILES_DOMAIN)
+                #if(callPreferences):
+                #    if(callPreferences.get('DoNotCall','False')=='False' and callPreferences.get('AlreadyRenewed','False')=='False' and callPreferences.get('NoInterest','False')=='False'):
+                #        queue_contact(data['custID'],'+'+countrycode+data['phone'],attributes,SQS_URL)
+                #    else:
+                #        print("Not queueing:" + callPreferences)
             except Exception as e:
                 print("Failed to queue")
                 print(e)

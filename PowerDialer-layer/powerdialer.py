@@ -275,3 +275,34 @@ def sendSuccessToken(token,id):
             output='{"Payload": {"callAttempt":"callAttemptFailed", "contactId":"' + str(id) + '","validNumber":"True"}}'
         )
         return response
+
+def update_call_attributes(customer_id,attributes,customerProfileDomain):
+    cpclient = boto3.client('customer-profiles')
+
+    try:
+        cp = cpclient.search_profiles(DomainName=customerProfileDomain,KeyName='_phone',Values=[phoneNumber])
+        if(len(cp['Items'])):
+            response = cpclient.update_profile(
+            DomainName=customerProfileDomain,
+            ProfileId=cp['Items'][0]['ProfileId'],
+            Attributes=attributes
+            )
+            print(f'Perfil del cliente actualizado correctamente: {response}')
+            return response
+
+    except ClientError as e:
+        print(f'Error updating profile: {e}')
+        return False
+
+
+def get_call_preferences(phoneNumber,customerProfileDomain):
+    cpclient = boto3.client('customer-profiles')
+    try:
+        cp = cpclient.search_profiles(DomainName=customerProfileDomain,KeyName='_phone',Values=[phoneNumber])
+    except ClientError as e:
+        print(f'Error searching profile: {e}')
+    else:
+        if(len(cp['Items'])):
+            return cp['Items'][0]['Attributes']
+        else:
+            return None

@@ -22,6 +22,9 @@ Parameters:
     Type: String
     AllowedPattern: "[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}"
     Description: Amazon Connect Queue ID to use for the outbound call
+  CustomerProfilesDomainName:
+    Type: String
+    Description: Amazon Connect Customer Profiles Domain Name
   CountryCode:
     Type: Number
     Default: 52
@@ -42,7 +45,6 @@ Parameters:
 
 
 Resources:
-
   dialinglistbucket:
     Type: AWS::S3::Bucket
     Properties:
@@ -266,7 +268,10 @@ Resources:
                   - 'connect:StartOutboundVoiceContact'
                   - 'connect:DescribeHoursOfOperation'
                   - 'connect:GetCurrentMetricData'
-                  - 'connect:DescribeQueue'
+                  - 'connect:CreateProfile'
+                  - 'profile:DeleteProfile'
+                  - 'profile:UpdateProfile'
+                  - 'profile:SearchProfiles'
                 Resource:
                   - '*'
         -
@@ -442,7 +447,15 @@ Resources:
       VisibilityTimeout: 30
       DelaySeconds: 0
       MessageRetentionPeriod: 86400
-    
+
+  PriorityDialingQueue:
+    Type: AWS::SQS::Queue
+    Properties:
+      QueueName: !Join ['-', [!Ref AWS::StackName,'priority' ,!Select [4, !Split ['-', !Select [2, !Split ['/', !Ref AWS::StackId]]]]]]
+      VisibilityTimeout: 30
+      DelaySeconds: 0
+      MessageRetentionPeriod: 86400
+
   PowerDialer:
     Type: AWS::Serverless::LayerVersion
     Properties:
@@ -469,7 +482,20 @@ Resources:
           DIALER_DEPLOYMENT: !Ref AWS::StackName
           ACTIVE_DIALING_TABLE: !Ref ActiveDialing
           RESULTS_FIREHOSE_NAME: !Ref ResultsFirehose
-      
+
+  updateProfile:
+    Type: AWS::Serverless::Function 
+    Properties:
+      Role: !GetAtt PowerDialerLambdaRole.Arn
+      CodeUri: PowerDialer-updateProfile/
+      Handler: lambda_function.lambda_handler
+      Layers:
+        - !Ref PowerDialer
+      Environment: 
+        Variables:
+          DIALER_DEPLOYMENT: !Ref AWS::StackName
+          CUSTOMER_PROFILES_DOMAIN: !Ref CustomerProfilesDomainName
+
   getAvailAgents:
     Type: AWS::Serverless::Function 
     Properties:
@@ -510,6 +536,7 @@ Resources:
         Variables:
           DIALER_DEPLOYMENT: !Ref AWS::StackName
           SQS_URL: !Ref DialingListQueue
+          SQS_PRIORITY_URL: !Ref PriorityDialingQueue
 
   queueContacts:
     Type: AWS::Serverless::Function 
@@ -526,7 +553,8 @@ Resources:
           DIALER_DEPLOYMENT: !Ref AWS::StackName
           SQS_URL: !Ref DialingListQueue
           SFN_ARN: !Ref DialerControlSF
-          
+          CUSTOMER_PROFILES_DOMAIN: !Ref CustomerProfilesDomainName
+
   pinpointLambdaPermission:
       Type: AWS::Lambda::Permission
       Properties: 
@@ -534,7 +562,6 @@ Resources:
         FunctionName: !Ref queueContacts
         Principal: !Sub pinpoint.${AWS::Region}.amazonaws.com
         SourceArn: !Sub arn:aws:mobiletargeting:${AWS::Region}:${AWS::AccountId}:apps/*
-
 
   ListLoad:
     Type: AWS::Serverless::Function 
