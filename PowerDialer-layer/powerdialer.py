@@ -301,6 +301,7 @@ def get_call_preferences(phoneNumber,customerProfileDomain):
         cp = cpclient.search_profiles(DomainName=customerProfileDomain,KeyName='_phone',Values=[phoneNumber])
     except ClientError as e:
         print(f'Error searching profile: {e}')
+        return None
     else:
         if(len(cp['Items'])):
             return cp['Items'][0]['Attributes']
