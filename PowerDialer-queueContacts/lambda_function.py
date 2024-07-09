@@ -64,7 +64,7 @@ def lambda_handler(event, context):
 
                 #callPreferences = get_call_preferences(countrycode+data['phone'],CUSTOMER_PROFILES_DOMAIN)
                 #if(callPreferences):
-                #    if(callPreferences.get('callDisposition','False')=='Sin interes' and callPreferences.get('callDisposition','False')=='No llamar' and callPreferences.get('callDisposition','False')=='Renovación previa'):
+                #    if(callPreferences.get('callDisposition','False')!='Sin interes' and callPreferences.get('callDisposition','False')!='No llamar' and callPreferences.get('callDisposition','False')!='Renovación previa'):
                 #        queue_contact(data['custID'],'+'+countrycode+data['phone'],attributes,SQS_URL)
                 #    else:
                 #        print("Not queueing:" + callPreferences)
