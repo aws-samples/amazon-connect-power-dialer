@@ -563,7 +563,7 @@ Resources:
           SQS_URL: !Ref DialingListQueue
           SFN_ARN: !Ref DialerControlSF
           CUSTOMER_PROFILES_DOMAIN: !Ref CustomerProfilesDomainName
-          NO_CALL_STATUS: !Ref NoCallStatusList
+          NO_CALL_STATUS: !Join [",", !Ref NoCallStatusList]
           VALIDATE_PROFILE: !Ref ValidateProfile
 
   pinpointLambdaPermission:
