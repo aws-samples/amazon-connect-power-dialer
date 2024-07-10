@@ -298,12 +298,13 @@ def update_call_attributes(customer_id,attributes,customerProfileDomain):
 def get_call_preferences(phoneNumber,customerProfileDomain):
     cpclient = boto3.client('customer-profiles')
     try:
-        cp = cpclient.search_profiles(DomainName=customerProfileDomain,KeyName='_phone',Values=[phoneNumber])
+        cp = cpclient.search_profiles(DomainName=customerProfileDomain,KeyName='_phone',Values=['+'+phoneNumber])
     except ClientError as e:
         print(f'Error searching profile: {e}')
         return None
     else:
+        print(cp['Items'])
         if(len(cp['Items'])):
-            return cp['Items'][0]['Attributes']
+            return cp['Items'][0].get('Attributes',None)
         else:
             return None

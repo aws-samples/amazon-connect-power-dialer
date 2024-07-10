@@ -22,6 +22,11 @@ Parameters:
     Type: String
     AllowedPattern: "[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}"
     Description: Amazon Connect Queue ID to use for the outbound call
+  ValidateProfile:
+    Type: String
+    Default: 'True'
+    AllowedValues: ["True", "False"]
+    Description: Determines whether the function will validate the profile exists or not.
   CustomerProfilesDomainName:
     Type: String
     Description: Amazon Connect Customer Profiles Domain Name
@@ -42,7 +47,10 @@ Parameters:
     Type: Number
     Default: 3600
     Description: Timeout in seconds for each call
-
+  NoCallStatusList:
+    Type: CommaDelimitedList
+    Default: Sin interes,No llamar,Renovación previa
+    Description: List of statuses for which no call will be made
 
 Resources:
   dialinglistbucket:
@@ -537,7 +545,7 @@ Resources:
         Variables:
           DIALER_DEPLOYMENT: !Ref AWS::StackName
           SQS_URL: !Ref DialingListQueue
-          SQS_PRIORITY_URL: !Ref PriorityDialingQueue
+          PRIORITY_SQS_URL: !Ref PriorityDialingQueue
 
   queueContacts:
     Type: AWS::Serverless::Function 
@@ -555,6 +563,8 @@ Resources:
           SQS_URL: !Ref DialingListQueue
           SFN_ARN: !Ref DialerControlSF
           CUSTOMER_PROFILES_DOMAIN: !Ref CustomerProfilesDomainName
+          NO_CALL_STATUS: !Ref NoCallStatusList
+          VALIDATE_PROFILE: !Ref ValidateProfile
 
   pinpointLambdaPermission:
       Type: AWS::Lambda::Permission

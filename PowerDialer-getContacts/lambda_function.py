@@ -20,10 +20,10 @@ def lambda_handler(event, context):
             msgblock = get_contact(availAgents,SQS_URL)
             messages.append(msgblock)
     else:
-        #if(check_for_contacts(PRIORITY_SQS_URL)):
-        #    messages = get_contact(availAgents,PRIORITY_SQS_URL)
-        #else:
-        #    messages = get_contact(availAgents,SQS_URL) 
+        if(check_for_contacts(PRIORITY_SQS_URL)):
+            messages = get_contact(availAgents,PRIORITY_SQS_URL)
+        else:
+            messages = get_contact(availAgents,SQS_URL) 
         messages = get_contact(availAgents,SQS_URL)
 
     if messages is not None:

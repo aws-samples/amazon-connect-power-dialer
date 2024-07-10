@@ -15,14 +15,17 @@ SQS_URL = os.environ['SQS_URL']
 DIALER_DEPLOYMENT= os.environ['DIALER_DEPLOYMENT']
 SFN_ARN = os.environ['SFN_ARN']
 CUSTOMER_PROFILES_DOMAIN = os.environ['CUSTOMER_PROFILES_DOMAIN']
+NO_CALL_STATUS = os.environ['NO_CALL_STATUS'].split(",")
+VALIDATE_PROFILE = os.environ['VALIDATE_PROFILE']
 countrycode = get_config('countrycode', DIALER_DEPLOYMENT)
-isocountrycode = get_config('isocountrycode', DIALER_DEPLOYMENT)
 
 
 def lambda_handler(event, context):
     print(event)
+    print(NO_CALL_STATUS)
     endpoints=event['Endpoints']
     count=0
+    skipped=0
     errors=0
     custom_events_batch = {}
     ApplicationId= event['ApplicationId']
@@ -53,33 +56,32 @@ def lambda_handler(event, context):
             if('attributes' in data):
                 attributes.update(data['attributes'])
             
-            #if(data):
-              #validated_number = validate_endpoint(data['phone'],countrycode,isocountrycode)
-              
-            #if(validated_number and 'PhoneType' in validated_number and validated_number['PhoneType']!='INVALID'):
             try:
-                count+=1
-                print("Queuing",'+'+countrycode+data['phone'],data['custID'],attributes)
-                queue_contact(data['custID'],'+'+countrycode+data['phone'],attributes,SQS_URL)
-
-                #callPreferences = get_call_preferences(countrycode+data['phone'],CUSTOMER_PROFILES_DOMAIN)
-                #if(callPreferences):
-                #    if(callPreferences.get('callDisposition','False')!='Sin interes' and callPreferences.get('callDisposition','False')!='No llamar' and callPreferences.get('callDisposition','False')!='Renovación previa'):
-                #        queue_contact(data['custID'],'+'+countrycode+data['phone'],attributes,SQS_URL)
-                #    else:
-                #        print("Not queueing:" + callPreferences)
+                print("Querying profile",'+'+countrycode+data['phone'],data['custID'],attributes)
+                if (VALIDATE_PROFILE):
+                    callPreferences = get_call_preferences(countrycode+data['phone'],CUSTOMER_PROFILES_DOMAIN)
+                    print("Evaluating callPreferences",callPreferences)
+                    if(callPreferences):
+                        if(callPreferences.get('callDisposition','False') not in NO_CALL_STATUS):
+                            print("Validated call preferences")
+                            queue_contact(data['custID'],'+'+countrycode+data['phone'],attributes,SQS_URL)
+                            count+=1
+                        else:
+                            print("Not queueing:",callPreferences)
+                            skipped+=1
+                    else:
+                        print("No validation, queuing")
+                        queue_contact(data['custID'],'+'+countrycode+data['phone'],attributes,SQS_URL)
+                else:
+                    queue_contact(data['custID'],'+'+countrycode+data['phone'],attributes,SQS_URL)
             except Exception as e:
                 print("Failed to queue")
                 print(e)
                 errors+=1
-            else:
-                print("Added to queue:" + str(data['phone']))
-                #custom_events_batch[key] = create_failure_custom_event(key, CampaignId, "Invalid phone")
                 
         else:
             print("Template returned blank")
-            #custom_events_batch[key] = create_failure_custom_event(key, CampaignId, "Template not found")
-            #pause_campaign(ApplicationId,CampaignId)
+
         
     if(count):
         print("Contacts added to queue, validating dialer status.")
@@ -278,3 +280,17 @@ def pause_campaign(application_id,campaign_id):
         return False
     else:
         return response
+
+def get_call_preferences(phoneNumber,customerProfileDomain):
+    cpclient = boto3.client('customer-profiles')
+    try:
+        cp = cpclient.search_profiles(DomainName=customerProfileDomain,KeyName='_phone',Values=['+'+phoneNumber])
+    except ClientError as e:
+        print(f'Error searching profile: {e}')
+        return None
+    else:
+        print(cp['Items'])
+        if(len(cp['Items'])):
+            return cp['Items'][0].get('Attributes',None)
+        else:
+            return None
