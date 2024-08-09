@@ -522,7 +522,7 @@ Resources:
       QueueName: !Join ['-', [!Ref AWS::StackName, !Select [4, !Split ['-', !Select [2, !Split ['/', !Ref AWS::StackId]]]]]]
       VisibilityTimeout: 30
       DelaySeconds: 0
-      MessageRetentionPeriod: 86400
+      MessageRetentionPeriod: 1209600
 
   PriorityDialingQueue:
     Type: AWS::SQS::Queue
@@ -530,7 +530,7 @@ Resources:
       QueueName: !Join ['-', [!Ref AWS::StackName,'priority' ,!Select [4, !Split ['-', !Select [2, !Split ['/', !Ref AWS::StackId]]]]]]
       VisibilityTimeout: 30
       DelaySeconds: 0
-      MessageRetentionPeriod: 86400
+      MessageRetentionPeriod: 1209600
 
   PowerDialer:
     Type: AWS::Serverless::LayerVersion
