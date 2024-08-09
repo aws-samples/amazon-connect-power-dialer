@@ -166,8 +166,8 @@ Resources:
                   - !GetAtt getContacts.Arn
                   - !GetAtt getConnectStatus.Arn
                   - !Sub 
-                    - 'arn:aws:lambda:${AWS::Region}:${AWS::AccountId}:${listLoadARN}/*'
-                    - listLoadARN: !Join ['-', [!Ref AWS::StackName,'listload' ,!Select [4, !Split ['-', !Select [2, !Split ['/', !Ref AWS::StackId]]]]]]
+                    - 'arn:aws:lambda:${AWS::Region}:${AWS::AccountId}:function:${listLoadName}'
+                    - listLoadName: !Join ['-', [!Ref AWS::StackName,'listload' ,!Select [4, !Split ['-', !Select [2, !Split ['/', !Ref AWS::StackId]]]]]]
         -
           PolicyName: ParameterAccess
           PolicyDocument:
