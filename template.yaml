@@ -641,29 +641,34 @@ Resources:
           CUSTOMER_PROFILES_DOMAIN: !Ref CustomerProfilesDomainName
           NO_CALL_STATUS: !Join [",", !Ref NoCallStatusList]
           VALIDATE_PROFILE: !Ref ValidateProfile
-      Events:
-        Trigger:
-          Type: EventBridgeRule
-          Properties:
-            Pattern:
-              source:
-                - "aws.s3"
-              detail-type:
-                - 'Object Created'
-              detail:
-                bucket:
-                  name:
-                    - !Ref dialinglistbucket
-            RoleArn: !Ref PowerDialerListLoadEventBridgeRole.Arn
-            InputTransformer:
-              InputPathsMap:
-                "bucket" : "$.detail.bucket.name"
-                "filename" : "$.detail.object.key"
-              InputTemplate: |
-                {
-                "bucket" : <bucket>
-                "filename" : <filename>
-                }
+
+ListLoadTrigger:
+Type: AWS::Events::Rule
+Properties:
+  Description: Campaign launch trigger
+  EventPattern:
+    source:
+      - "aws.s3"
+    detail-type:
+      - 'Object Created'
+    detail:
+      bucket:
+        name:
+          - !Ref dialinglistbucket
+  Name: !Join ['-', [!Ref AWS::StackName,'ListLoadTrigger' ,!Select [4, !Split ['-', !Select [2, !Split ['/', !Ref AWS::StackId]]]]]]
+  Targets: 
+    - Arn: >-
+      Id: ' CrossRegionDestinationBus'
+      RoleArn: !GetAtt PowerDialerListLoadEventBridgeRole.Arn
+      InputTransformer:
+        InputPathsMap:
+          "bucket" : "$.detail.bucket.name"
+          "filename" : "$.detail.object.key"
+        InputTemplate: |
+          {
+          "bucket" : <bucket>
+          "filename" : <filename>
+          }
 
   contactSource:
     Type: AWS::SSM::Parameter
