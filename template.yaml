@@ -432,7 +432,9 @@ Resources:
         PowerDialergetAvailAgentsArn: !GetAtt getAvailAgents.Arn
         PowerDialergetConfigArn: !GetAtt getConfig.Arn
         PowerDialergetContactsArn: !GetAtt getContacts.Arn
-        PowerDialerListLoadArn: !GetAtt ListLoad.Arn
+        PowerDialerListLoadArn: !Sub 
+          - 'arn:aws:s3:::${listLoadARN}/*'
+          - listLoadARN: !Join ['-', [!Ref AWS::StackName,'listload' ,!Select [4, !Split ['-', !Select [2, !Split ['/', !Ref AWS::StackId]]]]]]
         PowerDialergetConnectStatusArn: !GetAtt getConnectStatus.Arn
         ParameterIndex: !Join ['/', ['/connect/dialer', !Ref AWS::StackName,'dialIndex']]
         ParameterTotalRecords: !Join ['/', ['/connect/dialer', !Ref AWS::StackName,'totalRecords']]
