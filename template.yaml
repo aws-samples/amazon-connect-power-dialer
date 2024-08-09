@@ -657,7 +657,7 @@ Resources:
               - !Ref dialinglistbucket
       Name: !Join ['-', [!Ref AWS::StackName,'ListLoadTrigger' ,!Select [4, !Split ['-', !Select [2, !Split ['/', !Ref AWS::StackId]]]]]]
       Targets: 
-        - Arn: !GetAtt ListLoadSF.Arn
+        - Arn: !Ref ListLoadSF
           Id: 'CampaingLauncher'
           RoleArn: !GetAtt PowerDialerListLoadEventBridgeRole.Arn
           InputTransformer:
