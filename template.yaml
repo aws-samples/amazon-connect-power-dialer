@@ -443,7 +443,7 @@ Resources:
   ListLoadSF:
     Type: AWS::Serverless::StateMachine
     Properties:
-      FunctionName: !Join ['-', [!Ref AWS::StackName,'ListLoadSF', !Select [4, !Split ['-', !Select [2, !Split ['/', !Ref AWS::StackId]]]]]]
+      Name: !Join ['-', [!Ref AWS::StackName,'ListLoadSF', !Select [4, !Split ['-', !Select [2, !Split ['/', !Ref AWS::StackId]]]]]]
       Role: !GetAtt ControlSFRole.Arn
       DefinitionUri: statemachine/PowerDialer-ListLoad.asl.json
       DefinitionSubstitutions:
@@ -592,7 +592,7 @@ Resources:
   ListLoad:
     Type: AWS::Serverless::Function 
     Properties:
-      Name: !Join ['-', [!Ref AWS::StackName,'listload' ,!Select [4, !Split ['-', !Select [2, !Split ['/', !Ref AWS::StackId]]]]]]
+      FunctionName: !Join ['-', [!Ref AWS::StackName,'listload' ,!Select [4, !Split ['-', !Select [2, !Split ['/', !Ref AWS::StackId]]]]]]
       Role: !GetAtt PowerDialerLambdaRole.Arn
       CodeUri: PowerDialer-ListLoad/
       Handler: lambda_function.lambda_handler
