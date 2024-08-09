@@ -443,7 +443,7 @@ Resources:
   ListLoadSF:
     Type: AWS::Serverless::StateMachine
     Properties:
-      Name: !Join ['-', [!Ref AWS::StackName,'ListLoadSF', !Select [4, !Split ['-', !Select [2, !Split ['/', !Ref AWS::StackId]]]]]]
+      FunctionName: !Join ['-', [!Ref AWS::StackName,'ListLoadSF', !Select [4, !Split ['-', !Select [2, !Split ['/', !Ref AWS::StackId]]]]]]
       Role: !GetAtt ControlSFRole.Arn
       DefinitionUri: statemachine/PowerDialer-ListLoad.asl.json
       DefinitionSubstitutions:
