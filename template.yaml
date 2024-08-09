@@ -657,12 +657,12 @@ Resources:
             RoleArn: !Ref PowerDialerListLoadEventBridgeRole.Arn
             InputTransformer:
               InputPathsMap:
-                "bucket":"$.detail.bucket.name"
-                "filename":"$.detail.object.key"
+                "bucket" : "$.detail.bucket.name"
+                "filename" : "$.detail.object.key"
               InputTemplate: |
                 {
-                "bucket":<bucket>,
-                "filename":<filename>
+                "bucket" : <bucket>
+                "filename" : <filename>
                 }
 
   contactSource:
