@@ -32,6 +32,7 @@ def lambda_handler(event, context):
         if(token!= None):
             print("Existing previous call attempt")
             send_task_success(task_token)
+            results = {'CampaignStep':'Dialing','phone':phone,'CallConnected':True,'contactId':contactId}
         else:
             print("Completed new call")
             validNumber= True

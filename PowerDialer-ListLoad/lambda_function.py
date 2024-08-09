@@ -1,63 +1,134 @@
-##dialer list loading Function
+##Add S3 file contacts to queue
 import json
-import boto3
 import os
-import csv
-from powerdialer import get_config, upload_dial_record, update_config, queue_contact
-from urllib.parse import unquote
+import boto3
+import datetime
+from botocore.exceptions import ClientError
+from powerdialer import get_config
+import re
 
-from boto3.dynamodb.conditions import Key
 
-client = boto3.client('events')
+sfn = boto3.client('stepfunctions')
+
+
+SQS_URL = os.environ['SQS_URL']
+DIALER_DEPLOYMENT= os.environ['DIALER_DEPLOYMENT']
+SFN_ARN = os.environ['SFN_ARN']
+CUSTOMER_PROFILES_DOMAIN = os.environ['CUSTOMER_PROFILES_DOMAIN']
+NO_CALL_STATUS = os.environ['NO_CALL_STATUS'].split(",")
+VALIDATE_PROFILE = os.environ['VALIDATE_PROFILE']
+
+
 
 def lambda_handler(event, context):
     print(event)
-    DIALER_DEPLOYMENT = os.environ['DIALER_DEPLOYMENT']
-    SQS_URL= os.environ['SQS_URL']
-
-    #dialerList = get_config('table-dialerlist', DIALER_DEPLOYMENT) ##Previous approach
+    countrycode = get_config('countrycode', DIALER_DEPLOYMENT)
+    s3fileName=event['BatchInput']['bucket']
     
-    index = 1
+    items = []
+    for item_data in event['Items']:
+        item = flatten_keys(item_data)
+        #try:
+        
+        if (VALIDATE_PROFILE):
+            disposition = check_valid_disposition(countrycode+item['Address'],CUSTOMER_PROFILES_DOMAIN)
+            if(disposition):
+                print("Accepting calls")
+                items.append(pack_entry(item,s3fileName))
+            else:
+                print("No call flag")
+                items.append(pack_entry(item,s3fileName))
+        else:
+            print("No validation, queuing")
+            items.append(pack_entry(item,s3fileName))
+    
+        #except Exception as e:
+        #    print("Failed checking profile")
+        #    print(e)
+    
+    response = queue_contacts(items,SQS_URL)
+        
+
+    return {
+        'statusCode': 200,
+        'queudContacts':response
+    }
+
+def get_template(template):
+  try:
+    response = pinpointClient.get_voice_template(
+      TemplateName=template
+    )
+  except Exception as e:
+    print("Error retrieving template")
+    print(e)
+    return False
+  else:
+    return response['VoiceTemplateResponse']['Body']
+
+
+def check_valid_disposition(phoneNumber,customerProfileDomain):
+    cpclient = boto3.client('customer-profiles')
+    
+    cp = cpclient.search_profiles(DomainName=customerProfileDomain,KeyName='_phone',Values=['+'+phoneNumber])
+
+    if(len(cp['Items']) and 'Attributes' in cp['Items'][0] and 'callDisposition' in cp['Items'][0]['Attributes']):
+        print(cp['Items'][0]['Attributes']['callDisposition'])
+        if(cp['Items'][0]['Attributes']['callDisposition'] not in NO_CALL_STATUS):
+            return True
+        else:
+            return False
+    else:
+        print("No call disposition assigned")
+        return True
+
+def queue_contacts(entries,sqs_url):
+    sqs = boto3.client('sqs')
     try:
-        for rec in event['Records']:
-            # get file key from event
-            fileKey = unquote(unquote(rec['s3']['object']['key']))
-            bucket = rec['s3']['bucket']['name']
-            
-            #s3 = boto3.client('s3')
-            s3_resource = boto3.resource('s3')
-            
-            s3_object = s3_resource.Object(bucket, fileKey)
-            data = s3_object.get()['Body'].read().decode('utf-8').splitlines()
-
-            
-            requiredFields = set(['phone', 'custID'])
-    
-            lines = csv.DictReader(data)
-            index = 1
-            for line in lines:
-                if all(item in line for item in requiredFields):
-                    attributes = {}
-                    for key in line.keys():
-                        if (key not in requiredFields):
-                            attributes[key]=line[key]
-
-                    queue_contact(line['custID'],line['phone'], attributes,SQS_URL)
-                    #upload_dial_record(index,line['custID'],line['phone'], attributes,dialerList)
-                    index +=1            
-    
-            update_config('totalRecords', str(index-1), DIALER_DEPLOYMENT)
-            update_config('dialIndex', str(1), DIALER_DEPLOYMENT)
-    
-    except Exception as e:
-        print(e)
-        raise e
-    
-    return "Succesfully loaded: " + str(index-1) + " total records."
+        response = sqs.send_message_batch(
+            QueueUrl=sqs_url,
+            Entries=entries
+        )
+    except ClientError as e:
+        print(e.response['Error'])
+        return False
+    else:
+        return len(response['Successful'])
+        
 
 
-get_time_expression(hour,minutes,tzshift):
-    utchour = int(hour) + int(tzshift)
-    schedule = 'cron(' + minutes + ' ' + str(utchour) + ' ' + '? * MON-FRI *)'
-    print(schedule)
-    return (schedule)
+def pack_entry(item,s3fileName):
+    attributes={
+      'campaignId': datetime.datetime.now().isoformat(),
+      'applicationId': 'S3FileImported',
+      'campaignName': s3fileName
+      }  
+    
+    return {
+    'Id': item['UserId'],
+    'MessageBody': item['Address'],
+    'MessageAttributes': {
+                'custID': {
+                    'DataType': 'String',
+                    'StringValue': item['UserId']
+                },
+                'phone': {
+                    'DataType': 'String',
+                    'StringValue': item['Address']
+                },
+                'attributes': {
+                    'DataType': 'String',
+                    'StringValue': json.dumps(item)
+                }
+        }
+    }
+
+def flatten_keys(item_data):
+    transformed_data = {}
+    for key, value in item_data.items():
+        if '.' in key:
+            new_key = key.split('.')[-1]
+            transformed_data[new_key] = value
+        else:
+            transformed_data[key] = value
+    return transformed_data

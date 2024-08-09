@@ -50,14 +50,18 @@ Parameters:
   NoCallStatusList:
     Type: CommaDelimitedList
     Default: Sin interes,No llamar,Renovación previa
-    Description: List of statuses for which no call will be made
+    Description: Status list for which no call will be made
 
 Resources:
   dialinglistbucket:
     Type: AWS::S3::Bucket
     Properties:
       BucketName: !Join ['-', [!Ref AWS::StackName,'input-bucket', !Select [4, !Split ['-', !Select [2, !Split ['/', !Ref AWS::StackId]]]]]]
+      NotificationConfiguration:
+        EventBridgeConfiguration:
+          EventBridgeEnabled: True
     DeletionPolicy: Delete
+
   
   resultsbucket:
     Type: AWS::S3::Bucket
@@ -433,7 +437,16 @@ Resources:
         ParameterActiveDialing: !Join ['/', ['/connect/dialer', !Ref AWS::StackName,'table-activedialing']]
         ParameterDialerStatus: !Join ['/', ['/connect/dialer', !Ref AWS::StackName,'activeDialer']]
         ParameterConcurrencyChange: !Join ['/', ['/connect/dialer', !Ref AWS::StackName,'concurrencyChange']]
-        
+
+  ListLoadSF:
+    Type: AWS::Serverless::StateMachine
+    Properties:
+      Name: !Join ['-', [!Ref AWS::StackName,'ListLoadSF', !Select [4, !Split ['-', !Select [2, !Split ['/', !Ref AWS::StackId]]]]]]
+      Role: !GetAtt ControlSFRole.Arn
+      DefinitionUri: statemachine/PowerDialer-ListLoad.asl.json
+      DefinitionSubstitutions:
+        PowerDialers3ListLoadArn: !GetAtt ListLoad.Arn
+
   ResultsFirehose:
     Type: 'AWS::KinesisFirehose::DeliveryStream'
     Properties:
@@ -588,17 +601,23 @@ Resources:
         Variables:
           DIALER_DEPLOYMENT: !Ref AWS::StackName
           SQS_URL: !Ref DialingListQueue
+          SFN_ARN: !Ref DialerControlSF
+          CUSTOMER_PROFILES_DOMAIN: !Ref CustomerProfilesDomainName
+          NO_CALL_STATUS: !Join [",", !Ref NoCallStatusList]
+          VALIDATE_PROFILE: !Ref ValidateProfile
       Events:
-        LoadFileEvent:
-          Type: S3
+        Trigger:
+          Type: EventBridgeRule
           Properties:
-            Bucket: !Ref dialinglistbucket
-            Events: s3:ObjectCreated:*
-            Filter:
-              S3Key:
-                Rules:
-                  - Name: suffix
-                    Value: ".csv"    
+            Pattern:
+              source:
+                - "aws.s3"
+              detail-type:
+                - 'Object Created'
+              detail:
+                bucket:
+                  name:
+                    - !Ref dialinglistbucket
 
   contactSource:
     Type: AWS::SSM::Parameter
@@ -755,7 +774,7 @@ Resources:
 
 Outputs:
   InputBucket:
-    Description: "Bucket for List Loading and Results generation"
+    Description: "Bucket for List Loading. Use Pinpoint CSV template format"
     Value: !Ref dialinglistbucket 
   ConnectConfigConnectId:
     Description: "Connect - Instance Id parameter"
