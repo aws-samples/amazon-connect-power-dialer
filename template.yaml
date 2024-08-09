@@ -659,10 +659,10 @@ Resources:
               InputPathsMap:
                 "bucket":"$.detail.bucket.name"
                 "filename":"$.detail.object.key"
-              InputTemplate: | 
+              InputTemplate: |
                 {
-                "bucket":"<bucket>",
-                "filename":"<filename>"
+                "bucket":<bucket>,
+                "filename":<filename>
                 }
 
   contactSource:
