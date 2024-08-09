@@ -166,7 +166,7 @@ Resources:
                   - !GetAtt getContacts.Arn
                   - !GetAtt getConnectStatus.Arn
                   - !Sub 
-                    - 'arn:aws:s3:::${listLoadARN}/*'
+                    - 'arn:aws:lambda:::${listLoadARN}/*'
                     - listLoadARN: !Join ['-', [!Ref AWS::StackName,'listload' ,!Select [4, !Split ['-', !Select [2, !Split ['/', !Ref AWS::StackId]]]]]]
         -
           PolicyName: ParameterAccess
@@ -181,6 +181,25 @@ Resources:
                   - 'ssm:PutParameter'
                 Resource:
                   - '*'
+        -
+          PolicyName: BucketAccess
+          PolicyDocument:
+            Version: 2012-10-17
+            Statement:
+              -
+                Effect: Allow
+                Action:
+                  - 's3:PutObject'
+                  - 's3:GetObject'
+                  - 's3:DeleteObject'
+                  - 's3:ListBucket'
+                Resource:
+                  - !Sub 
+                    - 'arn:aws:s3:::${dialingListBucket}'
+                    - dialingListBucket: !Join ['-', [!Ref AWS::StackName,'input-bucket', !Select [4, !Split ['-', !Select [2, !Split ['/', !Ref AWS::StackId]]]]]]
+                  - !Sub 
+                    - 'arn:aws:s3:::${dialingListBucket}/*'
+                    - dialingListBucket: !Join ['-', [!Ref AWS::StackName,'input-bucket', !Select [4, !Split ['-', !Select [2, !Split ['/', !Ref AWS::StackId]]]]]]
   PowerDialerListLoadEventBridgeRole:
     Type: AWS::IAM::Role
     Properties:
