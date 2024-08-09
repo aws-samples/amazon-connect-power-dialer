@@ -164,8 +164,10 @@ Resources:
                   - !GetAtt getAvailAgents.Arn
                   - !GetAtt getConfig.Arn
                   - !GetAtt getContacts.Arn
-                  - !GetAtt ListLoad.Arn
                   - !GetAtt getConnectStatus.Arn
+                  - !Sub 
+                    - 'arn:aws:s3:::${listLoadARN}/*'
+                    - listLoadARN: !Join ['-', [!Ref AWS::StackName,'listload' ,!Select [4, !Split ['-', !Select [2, !Split ['/', !Ref AWS::StackId]]]]]]
         -
           PolicyName: ParameterAccess
           PolicyDocument:
@@ -590,6 +592,7 @@ Resources:
   ListLoad:
     Type: AWS::Serverless::Function 
     Properties:
+      Name: !Join ['-', [!Ref AWS::StackName,'listload' ,!Select [4, !Split ['-', !Select [2, !Split ['/', !Ref AWS::StackId]]]]]]
       Role: !GetAtt PowerDialerLambdaRole.Arn
       CodeUri: PowerDialer-ListLoad/
       Handler: lambda_function.lambda_handler
