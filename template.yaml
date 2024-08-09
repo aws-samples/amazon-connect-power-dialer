@@ -664,11 +664,7 @@ Resources:
             InputPathsMap:
               "bucket" : "$.detail.bucket.name"
               "filename" : "$.detail.object.key"
-            InputTemplate: |
-              {
-              "bucket" : <bucket>
-              "filename" : <filename>
-              }
+            InputTemplate: '{"bucket" : <bucket>, "filename" : <filename>}'
 
   contactSource:
     Type: AWS::SSM::Parameter
