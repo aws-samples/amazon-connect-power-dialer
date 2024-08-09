@@ -658,7 +658,7 @@ Resources:
       Name: !Join ['-', [!Ref AWS::StackName,'ListLoadTrigger' ,!Select [4, !Split ['-', !Select [2, !Split ['/', !Ref AWS::StackId]]]]]]
       Targets: 
         - Arn: >-
-          Id: ' CrossRegionDestinationBus'
+          Id: 'CampaingLauncher'
           RoleArn: !GetAtt PowerDialerListLoadEventBridgeRole.Arn
           InputTransformer:
             InputPathsMap:
