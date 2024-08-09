@@ -166,7 +166,7 @@ Resources:
                   - !GetAtt getContacts.Arn
                   - !GetAtt getConnectStatus.Arn
                   - !Sub 
-                    - 'arn:aws:lambda:::${listLoadARN}/*'
+                    - 'arn:aws:lambda:${AWS::AccountId}:${AWS::AccountId}:${listLoadARN}/*'
                     - listLoadARN: !Join ['-', [!Ref AWS::StackName,'listload' ,!Select [4, !Split ['-', !Select [2, !Split ['/', !Ref AWS::StackId]]]]]]
         -
           PolicyName: ParameterAccess
