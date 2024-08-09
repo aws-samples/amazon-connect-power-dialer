@@ -181,6 +181,37 @@ Resources:
                   - 'ssm:PutParameter'
                 Resource:
                   - '*'
+  PowerDialerListLoadEventBridgeRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          -
+            Effect: Allow
+            Principal:
+              Service:
+                - events.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        -
+          PolicyName: ControlStateMachine
+          PolicyDocument:
+            Version: 2012-10-17
+            Statement:
+              -
+                Effect: Allow
+                Action:
+                  - states:DescribeExecution
+                  - states:StartExecution
+                  - states:StopExecution
+                  - states:ListExecutions
+                Resource:                   
+                  - !Sub 
+                    - 'arn:aws:states:${AWS::Region}:${AWS::AccountId}:stateMachine:${ListLoadSFArn}'
+                    - ListLoadSFArn: !Join ['-', [!Ref AWS::StackName,'ListLoadSF', !Select [4, !Split ['-', !Select [2, !Split ['/', !Ref AWS::StackId]]]]]]
+
+  
   
   PowerDialerLambdaRole:
     Type: AWS::IAM::Role
@@ -623,6 +654,16 @@ Resources:
                 bucket:
                   name:
                     - !Ref dialinglistbucket
+            RoleArn: !Ref PowerDialerListLoadEventBridgeRole.Arn
+            InputTransformer:
+              InputPathsMap:
+                "bucket":"$.detail.bucket.name"
+                "filename":"$.detail.object.key"
+              InputTemplate: | 
+                {
+                "bucket":"<bucket>",
+                "filename":"<filename>"
+                }
 
   contactSource:
     Type: AWS::SSM::Parameter
