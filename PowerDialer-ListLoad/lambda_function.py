@@ -34,13 +34,13 @@ def lambda_handler(event, context):
             disposition = check_valid_disposition(countrycode+item['Address'],CUSTOMER_PROFILES_DOMAIN)
             if(disposition):
                 print("Accepting calls")
-                items.append(pack_entry(item,s3fileName))
+                items.append(pack_entry(item,countrycode,s3fileName))
             else:
                 print("No call flag")
-                items.append(pack_entry(item,s3fileName))
+                items.append(pack_entry(item,countrycode,s3fileName))
         else:
             print("No validation, queuing")
-            items.append(pack_entry(item,s3fileName))
+            items.append(pack_entry(item,countrycode,s3fileName))
     
         #except Exception as e:
         #    print("Failed checking profile")
@@ -97,7 +97,7 @@ def queue_contacts(entries,sqs_url):
         
 
 
-def pack_entry(item,s3fileName):
+def pack_entry(item,countrycode,s3fileName):
     attributes={
       'campaignId': datetime.datetime.now().isoformat(),
       'applicationId': 'S3FileImported',
@@ -106,7 +106,7 @@ def pack_entry(item,s3fileName):
     
     return {
     'Id': item['UserId'],
-    'MessageBody': item['Address'],
+    'MessageBody': '+' + countrycode + item['Address'],
     'MessageAttributes': {
                 'custID': {
                     'DataType': 'String',
@@ -114,7 +114,7 @@ def pack_entry(item,s3fileName):
                 },
                 'phone': {
                     'DataType': 'String',
-                    'StringValue': item['Address']
+                    'StringValue': '+' + countrycode + item['Address']
                 },
                 'attributes': {
                     'DataType': 'String',
