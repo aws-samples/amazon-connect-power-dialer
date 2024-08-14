@@ -103,7 +103,8 @@ def pack_entry(item,countrycode,s3fileName):
       'applicationId': 'S3FileImported',
       'campaignName': s3fileName
       }  
-    
+   
+    attributes.update(item)
     return {
     'Id': item['UserId'],
     'MessageBody': '+' + countrycode + item['Address'],
