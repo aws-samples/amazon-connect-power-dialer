@@ -119,7 +119,7 @@ def pack_entry(item,countrycode,s3fileName):
                 },
                 'attributes': {
                     'DataType': 'String',
-                    'StringValue': json.dumps(item)
+                    'StringValue': json.dumps(attributes)
                 }
         }
     }
