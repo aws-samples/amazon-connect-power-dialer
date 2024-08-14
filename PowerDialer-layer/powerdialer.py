@@ -115,14 +115,14 @@ def place_call(phoneNumber, contactFlow,connectID,queue,attributes):
                   InstanceId=connectID,
                   QueueId=queue,
                   Attributes=attributes,
-                  ClientToken=attributes['campaignId']+'-'+attributes['endpointId'],
+                  ClientToken=attributes['campaignId']+'-'+phoneNumber,
                   )
           else:
                 response = connect_client.start_outbound_voice_contact(
                   DestinationPhoneNumber=phoneNumber,
                   ContactFlowId=contactFlow,
                   InstanceId=connectID,
-                  ClientToken=attributes['campaignId']+'-'+attributes['endpointId'],
+                  ClientToken=attributes['campaignId']+'-'+phoneNumber,
                   QueueId=queue
                   )
         except ClientError as error:
